@@ -1,0 +1,14 @@
+# Docker Compose configuration for running Valkey locally.
+# Start with: docker compose up -d
+# Stop with:  docker compose down
+
+services:
+  valkey:
+    image: valkey/valkey:8.0
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
