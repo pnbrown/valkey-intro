@@ -4,7 +4,7 @@ Common issues you might encounter during the workshop and how to resolve them.
 
 ## I get "Connection refused" when the app tries to reach Valkey
 
-This means the Valkey container is not running, or it is running on a different port. Run `docker compose ps` to check the container status. If it is not listed, start it with `docker compose up -d`. If it shows a status other than "healthy" or "Up," check the logs with `docker compose logs valkey`.
+This means the Valkey container is not running, or it is running on a different port. Run `docker compose -f ../docker-compose.yml ps` to check the container status. If it is not listed, start it with `docker compose -f ../docker-compose.yml up -d`. If it shows a status other than "healthy" or "Up," check the logs with `docker compose -f ../docker-compose.yml logs valkey`.
 
 Also confirm that nothing else is using port 6379 on your machine. On macOS or Linux, run `lsof -i :6379` to check.
 
@@ -39,8 +39,8 @@ It is real for the purposes of this workshop. Valkey responds in sub-millisecond
 TTL is set at the moment a key is stored, not retroactively. Changing `CACHE_TTL_SECONDS` in your `.env` file (and restarting Flask) only affects entries written after the restart. Entries already in Valkey retain whatever TTL they were originally given. If you want a clean slate, stop the container and start it again:
 
 ```bash
-docker compose down
-docker compose up -d
+docker compose -f ../docker-compose.yml down
+docker compose -f ../docker-compose.yml up -d
 ```
 
 ## Port 5000 is already in use
@@ -65,7 +65,7 @@ If that also fails, Docker may not be installed, or it is not in your PATH. Foll
 
 ## I see a yellow warning banner saying "Valkey is not reachable"
 
-This means the Flask app started with `CACHE_ENABLED=true` but cannot connect to Valkey on the configured host and port. The app is falling back to the slow data source. Confirm your Valkey container is running (`docker compose ps`) and that `VALKEY_HOST` and `VALKEY_PORT` in your `.env` file match the container's published port (default: localhost and 6379).
+This means the Flask app started with `CACHE_ENABLED=true` but cannot connect to Valkey on the configured host and port. The app is falling back to the slow data source. Confirm your Valkey container is running (`docker compose -f ../docker-compose.yml ps`) and that `VALKEY_HOST` and `VALKEY_PORT` in your `.env` file match the container's published port (default: localhost and 6379).
 
 ## What is the `safety/` directory?
 
