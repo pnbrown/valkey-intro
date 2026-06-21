@@ -2,7 +2,7 @@
 
 By the end of this workshop you'll understand what caching is and where it fits, you'll have added a Valkey caching layer to a web application and watched the performance difference firsthand, and you'll understand cache expiration and manual invalidation.
 
-To complete this workshop, you'll need Python 3.9 or later, Docker running on your machine, a text editor, and a terminal. That's it.
+To complete this workshop, you'll need Python 3.9 or later, Docker running on your machine, a text editor, a terminal, and git. That's it.
 
 ## Part 1: What is caching and why should you care?
 
@@ -10,7 +10,7 @@ If there's one sentence that captures caching, it's this: store the result of an
 
 > "A cache stores data so that future requests for that data can be served faster; the data stored in a cache might be the result of an earlier computation or a copy of data stored elsewhere." [Wikipedia, Cache (computing)](https://en.wikipedia.org/wiki/Cache_(computing))
 
-Your web browser caches images so it doesn't re-download them on every page load. DNS servers cache domain lookups so they don't traverse the full hierarchy every time. CDNs cache web content at edge locations. Same pattern every time. Something is slow or expensive to produce, so you keep a copy of the result somewhere fast.
+Your web browser caches images so it doesn't re-download them on every page load. DNS servers cache domain lookups so they don't traverse the full hierarchy every time. CDNs cache web content at edge locations. It is the same pattern every time. Something is slow or expensive to produce, so you keep a copy of the result somewhere fast.
 
 ### Why this matters for application developers
 
@@ -50,6 +50,16 @@ That's it. The cache layer sits between the route handler and the data source. I
 In this part, we complete a Flask web application that fetches data from a deliberately slow source. Every request takes over two seconds. This baseline matters. You need to feel the problem before the solution makes sense.
 
 The project already contains starter files with TODO placeholders. You'll open each file and fill in the missing logic. Code blocks below show the completed version.
+
+You'll need a text editor to modify the project files. Any editor works: VS Code, Sublime Text, Notepad, TextEdit (in plain text mode), or whatever you're comfortable with. If you don't have a preferred editor, [VS Code](https://code.visualstudio.com/) is a free option that works on all platforms.
+
+First clone the repository with git and navigate to that folder.
+```
+git clone https://github.com/pnbrown/valkey-intro.git
+cd valkey-intro/100-caching-intro/python
+```
+
+You may then begin completing the TODO blocks with the provided code below. If you get stuck, read the comments in the code.
 
 ### The data source
 
@@ -152,73 +162,9 @@ Right now this is the no-cache version. Every request goes straight to the slow 
 
 ### The HTML template
 
-Open `templates/index.html`. Replace the placeholder content with:
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valkey Caching Workshop</title>
-    <style>
-        body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; color: #333; }
-        form { margin: 20px 0; }
-        label { display: block; margin-bottom: 6px; font-weight: 500; }
-        input[type="text"] { padding: 8px 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; width: 250px; }
-        button { padding: 8px 16px; font-size: 1rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #1d4ed8; }
-        .timing-info { margin: 20px 0; padding: 12px 16px; background: #f3f4f6; border-radius: 6px; display: flex; gap: 24px; }
-        .timing-info span { font-weight: 500; }
-        .facts-list { list-style: disc; padding-left: 20px; }
-        .facts-list li { margin-bottom: 8px; line-height: 1.5; }
-        .cache-warning { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; }
-        .flash-message { background: #fee2e2; border: 1px solid #ef4444; color: #991b1b; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
-    </style>
-</head>
-<body>
-    <h1>Valkey Caching Workshop</h1>
-
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for message in messages %}
-                <div class="flash-message" role="alert">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    {% if cache_warning %}
-        <div class="cache-warning" role="alert">{{ cache_warning }}</div>
-    {% endif %}
-
-    <form action="/lookup" method="get">
-        <label for="topic-input">Enter a topic to look up:</label>
-        <input type="text" id="topic-input" name="topic" placeholder="e.g. valkey, python, docker">
-        <button type="submit">Look up</button>
-    </form>
-
-    {% if elapsed_ms is defined %}
-    <div class="timing-info">
-        <span>Response time: {{ elapsed_ms }} ms</span>
-        <span>Cache: {{ cache_status }}</span>
-    </div>
-    {% endif %}
-
-    {% if facts %}
-    <h2>Facts about "{{ topic }}"</h2>
-    <ul class="facts-list">
-        {% for fact in facts %}
-            <li>{{ fact }}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-</body>
-</html>
-```
+The HTML template lives in `templates/index.html`. The implementation is simple because I have never claimed to be a web/front end designer. If you would like to improve it, feel free. The original implementation is in the safety directory in case you need it.
 
 ### Running it
-
-You'll need a text editor to modify the project files. Any editor works: VS Code, Sublime Text, Notepad, TextEdit (in plain text mode), or whatever you're comfortable with. If you don't have a preferred editor, [VS Code](https://code.visualstudio.com/) is a free option that works on all platforms.
 
 Set up a virtual environment. This keeps the workshop's dependencies isolated from the rest of your system (and on newer macOS and Ubuntu, `pip install` won't work without one):
 

@@ -14,6 +14,7 @@ Store the result of an expensive operation so you don't have to repeat it. That'
 - Docker (for running Valkey)
 - A text editor
 - A terminal
+- Git (for cloning the repo)
 
 ## Architecture
 
