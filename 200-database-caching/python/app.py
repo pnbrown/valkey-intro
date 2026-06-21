@@ -29,7 +29,7 @@ if CACHE_ENABLED:
     cache = CacheLayer(
         host=os.environ.get("VALKEY_HOST", "localhost"),
         port=int(os.environ.get("VALKEY_PORT", "6379")),
-        ttl_seconds=int(os.environ.get("CACHE_TTL_SECONDS", "60")),
+        ttl_seconds=int(os.environ.get("CACHE_TTL_SECONDS", "300")),
     )
 
 

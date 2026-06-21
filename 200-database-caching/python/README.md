@@ -450,7 +450,7 @@ Again, if anything went wrong that you cannot troubleshoot, the completed files 
 
 ## Part 4: Write-through invalidation
 
-Our cache works, but there's a problem. Update a book's description in the database and the cache still serves the old version until TTL expires. For a sixty-second TTL, that's up to a minute of stale data after every change.
+Our cache works, but there's a problem. Update a book's description in the database and the cache still serves the old version until TTL expires. For our five-minute TTL, that's up to five minutes of stale data after every change.
 
 Here's what the write path needs to look like:
 

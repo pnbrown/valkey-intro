@@ -48,11 +48,11 @@ Our seed script uses `TRUNCATE books, authors RESTART IDENTITY CASCADE` before i
 
 Many entries in our dataset predate the Common Era (Diogenes, Epictetus). PostgreSQL's DATE type doesn't handle negative years cleanly. INTEGER stores the year as a simple number, which works for 350 BCE (`-350`) and 2022 CE (`2022`) without any parsing issues.
 
-### Why is the cache TTL sixty seconds instead of thirty?
+### Why is the cache TTL five minutes instead of thirty seconds?
 
 At the 100-level we use thirty seconds because you need to observe expiration quickly during the workshop. Here at the 200-level, the focus shifts to write-through invalidation, where you're clearing cache entries manually on writes rather than waiting for TTL. A longer TTL makes cache hits more visible between writes without requiring you to rush through the testing steps.
 
-Sixty seconds is still short enough to observe natural expiration if you wait.
+Five minutes is still short enough to observe natural expiration if you wait, but long enough that keys don't disappear while you're switching between the browser and the terminal to inspect them.
 
 ### Why separate the cache layer into its own module?
 
