@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: sentinelops_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sentinelops
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+
+  valkey:
+    image: valkey/valkey:7.2
+    container_name: sentinelops_valkey
+    ports:
+      - "6379:6379"
+    command: valkey-server --loglevel warning
+    restart: always
+
+volumes:
+  pgdata:
