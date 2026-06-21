@@ -170,21 +170,24 @@ app.post('/api/missions', async (req, res) => {
   }
 
   try {
+    const assignedToId = parseInt(assignedTo, 10);
+    const priorityInt = parseInt(priority, 10);
+
     const result = await query(
       'INSERT INTO missions (title, description, priority, status, sector, assigned_to) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [title, description, priority, 'active', sector, assignedTo]
+      [title, description, priorityInt, 'active', sector, assignedToId]
     );
     const mission = result.rows[0];
 
     // Push into Valkey Sorted Set (Mission priority Queue)
-    await valkeyService.addMissionToPriorityQueue(mission.id, priority);
+    await valkeyService.addMissionToPriorityQueue(mission.id, priorityInt);
 
     // Stream the creation event inside Valkey Stream for replay
     await valkeyService.logMissionEvent('mission-started', {
       missionId: mission.id,
       title,
-      priority,
-      assignedTo,
+      priority: priorityInt,
+      assignedTo: assignedToId,
       sector
     });
 
