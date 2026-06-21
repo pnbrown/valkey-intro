@@ -14,7 +14,7 @@ Replace the simulated delay with a real PostgreSQL database. Caching real query 
 
 ### 300-Level: Multi-Key Strategies and Cache Stampedes
 
-The application grows to serve different data types (user profiles, product listings, session data) with different TTL strategies per type. Covers cache warming, handling cache stampedes (thundering herd), and request coalescing to prevent multiple simultaneous fetches for the same key.
+Cache warming with Valkey pipelines to eliminate cold start penalties. Mutex-based stampede prevention using SET NX EX so only one request rebuilds an expired key while others wait. Circuit breaker pattern to stop attempting a down Valkey and avoid per-request timeout costs. Measuring cache effectiveness with INFO stats (hit rate, memory usage) and optional visual observability via Valkey Admin. Capstone load test demonstrating all patterns working together under concurrent traffic.
 
 ### 400-Level: Production Operations with Valkey Cluster
 

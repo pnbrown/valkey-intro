@@ -8,7 +8,7 @@ A progressive series of hands-on workshops that teach caching patterns using [Va
 |-------|-------|-------------------|
 | 100 | [Introduction to Caching](100-caching-intro/) | Cache-aside pattern, TTL expiration, manual invalidation |
 | 200 | [Database-Backed Caching](200-database-caching/) | Caching real database queries, write-through invalidation |
-| 300 | Multi-Key Strategies (planned) | Per-type TTL strategies, cache warming, stampede prevention |
+| 300 | Multi-Key Strategies (planned) | Cache warming, stampede prevention, circuit breaker, observability |
 | 400 | Production Operations (planned) | Valkey Cluster, eviction policies, observability |
 
 ## Prerequisites
