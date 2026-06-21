@@ -22,7 +22,7 @@ if CACHE_ENABLED:
     cache = CacheLayer(
         host=os.environ.get("VALKEY_HOST", "localhost"),
         port=int(os.environ.get("VALKEY_PORT", "6379")),
-        ttl_seconds=int(os.environ.get("CACHE_TTL_SECONDS", "60")),
+        ttl_seconds=int(os.environ.get("CACHE_TTL_SECONDS", "300")),
     )
 
 
@@ -30,7 +30,7 @@ if CACHE_ENABLED:
 def home():
     from db import get_all_genres
 
-    if CACHE_ENABLED and cache is not None and cache.is_connected:
+    if CACHE_ENABLED and cache is not None:
         cached_data, is_hit = cache.get("genres")
         if is_hit:
             genres = cached_data
@@ -52,7 +52,7 @@ def genre_listing(genre):
 
     start = time.perf_counter()
 
-    if CACHE_ENABLED and cache is not None and cache.is_connected:
+    if CACHE_ENABLED and cache is not None:
         cached_data, is_hit = cache.get(cache_key)
         if is_hit:
             books = cached_data
@@ -84,7 +84,7 @@ def book_detail(book_id):
 
     start = time.perf_counter()
 
-    if CACHE_ENABLED and cache is not None and cache.is_connected:
+    if CACHE_ENABLED and cache is not None:
         cached_data, is_hit = cache.get(cache_key)
         if is_hit:
             book = cached_data

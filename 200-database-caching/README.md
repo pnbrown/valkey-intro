@@ -11,7 +11,7 @@ In the 100-level, you cached results from a simulated slow source. This time the
 
 ## Prerequisites
 
-- Completed the [100-level workshop](../100-caching-intro/)
+- Completion of the [100-level workshop](../100-caching-intro/)
 - Docker (for running Valkey and PostgreSQL)
 - A text editor
 - A terminal

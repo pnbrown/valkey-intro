@@ -1,6 +1,6 @@
 # Database-Backed Caching with Valkey
 
-In the 100-level workshop, you cached results from a fake slow source. A `time.sleep()` pretending to be latency. It worked for learning the pattern, but nobody ships code that sleeps for two and a half seconds on purpose.
+In the 100-level workshop, you cached results from a fake slow source. You configured a `time.sleep()` pretending to be latency. It worked for learning the pattern, but nobody ships code that sleeps for two and a half seconds on purpose unless you're looking for an easy way to reduce latency to make stakeholders happy.
 
 This time the latency is real. You're querying PostgreSQL, observing actual network round-trips, and learning when caching database results is worth the added complexity. We're using the same cache-aside pattern. What changes is the invalidation story. Most applications don't just read data, they write it too. The moment you write, every cached copy of that data becomes a lie until you do something about it.
 
@@ -12,7 +12,7 @@ By the end of this workshop you'll have:
 
 This is where caching gets interesting, honestly. The 100-level teaches you the mechanics. This one teaches you why invalidation has a reputation.
 
-We're assuming you completed the [100-level workshop](../../100-caching-intro/). If cache-aside, TTL, and manual invalidation aren't comfortable yet, go back and finish that one first.
+We're assuming you completed the [100-level workshop](../../100-caching-intro/). If cache-aside, TTL, and manual invalidation aren't comfortable to you yet, go back and finish that one first.
 
 You'll need Python 3.9 or later, Docker, a text editor, and a terminal. All commands should be run from this directory unless noted otherwise.
 
@@ -89,7 +89,7 @@ Verify the data loaded:
 docker compose -f ../docker-compose.yml exec postgres psql -U workshop -d bookstore -c "SELECT COUNT(*) FROM books;"
 ```
 
-Should return sixty-seven.
+Should return sixty-seven. ⁶🤷⁷
 
 ## Part 2: Building the database-backed application (no cache)
 
@@ -113,7 +113,7 @@ def get_books_by_genre(genre):
                 FROM books b
                 JOIN authors a ON b.author_id = a.id
                 WHERE b.genre = %s
-                ORDER BY b.published_year
+                ORDER BY b.published_year DESC
             """, (genre,))
             return [dict(row) for row in cur.fetchall()]
 ```
@@ -233,11 +233,13 @@ python app.py
 
 Open [http://localhost:5000](http://localhost:5000). A genre list appears. Click one. Books show up with a "Query time" display. Click a book for its detail page.
 
-Query times are small (single-digit milliseconds for this dataset), but they're real network round-trips to PostgreSQL. On a local container, single-digit milliseconds doesn't feel like a problem worth solving. Put that database on the other side of a network boundary and those single digits become triple digits real quick. Caching becomes valuable when query latency is high, when the same query runs repeatedly, or when you need to reduce database load.
+Query times are small (low double-digit milliseconds for this dataset), but they're real network round-trips to PostgreSQL. On a local container, low double-digit milliseconds doesn't feel like a problem worth solving. Put that database on the other side of a network boundary and those double digits become triple digits real quick. Caching becomes valuable when query latency is high, when the same query runs repeatedly, or when you need to reduce database load.
 
 Refresh a genre page a few times. Query time stays roughly the same on every load. Nothing is remembered between requests.
 
-If things went sideways, completed files are in `safety/`.
+The app runs in debug mode, which means two things: Flask automatically reloads when you save changes to a `.py` file (no manual restart needed), and if something goes wrong, the browser itself shows the full error traceback instead of a generic "Internal Server Error" page. If you see a traceback in the browser, read it from the bottom up. The last line is the actual exception, and the frames above it show the call stack that led there.
+
+If you hit an error you're not able to troubleshoot, remember the completed files are in the `safety/` directory.
 
 ## Part 3: Adding the cache layer
 
@@ -261,7 +263,9 @@ Before writing code, think about the key structure:
 - `book:{book_id}` caches a single book's detail page data
 - `genres` caches the list of available genres
 
-Each key type maps to one query. When data changes, you need to know which keys to invalidate. Say a book's description changes. You invalidate `book:{id}` (the specific book) and `genre:{genre}` (the listing that includes it). This is the part nobody warns you about in caching tutorials. Writing to the cache is easy. Knowing what to blow away when something changes is the actual work.
+Each key type maps to one query. When data changes, you need to know which keys to invalidate. Say a book's description changes. You invalidate `book:{id}` (the specific book) and `genre:{genre}` (the listing that includes it). 
+
+This is the part nobody warns you about in caching tutorials. Writing to the cache is easy. Knowing what to blow away when something changes is the actual work.
 
 ### Filling in `invalidate_pattern`
 
@@ -293,7 +297,7 @@ Open `app.py`. Replace the routes you wrote in Part 2 with cached versions:
 def home():
     from db import get_all_genres
 
-    if CACHE_ENABLED and cache is not None and cache.is_connected:
+    if CACHE_ENABLED and cache is not None:
         cached_data, is_hit = cache.get("genres")
         if is_hit:
             genres = cached_data
@@ -320,7 +324,7 @@ def genre_listing(genre):
 
     start = time.perf_counter()
 
-    if CACHE_ENABLED and cache is not None and cache.is_connected:
+    if CACHE_ENABLED and cache is not None:
         cached_data, is_hit = cache.get(cache_key)
         if is_hit:
             books = cached_data
@@ -355,7 +359,7 @@ def book_detail(book_id):
 
     start = time.perf_counter()
 
-    if CACHE_ENABLED and cache is not None and cache.is_connected:
+    if CACHE_ENABLED and cache is not None:
         cached_data, is_hit = cache.get(cache_key)
         if is_hit:
             book = cached_data
@@ -394,13 +398,15 @@ Restart Flask (Ctrl+C, then `python app.py`).
 
 ### Observing the difference
 
-Genre page, first load. Cache MISS, single-digit milliseconds. Second load. Cache HIT, near zero. No database query on the second request.
+Genre page, first load. Cache MISS, double-digit milliseconds. Second load. Cache HIT, near zero. No database query on the second request.
 
 Same pattern on the book detail page. First load hits PostgreSQL. Second is returned from Valkey.
 
 On a local instance the performance improvement is modest (milliseconds). In production, where the database lives on a separate machine and queries are more complex, the difference is dramatic. But the pattern is identical regardless of scale.
 
 ### Looking inside the cache
+
+Open a second terminal window. Keep Flask running in the first one.
 
 You can see exactly what Valkey is holding with `valkey-cli`. These commands use the `-f` flag because you're running them from the `python/` directory:
 
@@ -420,7 +426,9 @@ That's the JSON your cache layer serialized. Check how long a key has before it 
 docker compose -f ../docker-compose.yml exec valkey valkey-cli TTL "genre:fantasy"
 ```
 
-Returns the number of seconds remaining. Watching keys appear after requests, seeing them disappear after invalidation (in Part 4), and checking TTL countdown gives you a direct feedback loop on what the code is doing.
+Returns the number of seconds remaining. If the keys have already expired by the time you run these commands, reload a page in the browser first to repopulate the cache. If you find yourself consistently missing them, increase `CACHE_TTL_SECONDS` in your `.env` file (the default is 300 seconds, but you can raise it further while learning).
+
+Watching keys appear after requests, seeing them disappear after invalidation (in Part 4), and checking TTL countdown gives you a direct feedback loop on what the code is doing.
 
 ### Optional: Try breaking it
 
@@ -438,11 +446,11 @@ Reset the data when you're done:
 python seed_db.py
 ```
 
-If things went sideways, completed files are in `safety/`.
+Again, if anything went wrong that you cannot troubleshoot, the completed files are in the `safety/` directory.
 
 ## Part 4: Write-through invalidation
 
-Our cache works, but there's a problem. Update a book's description in the database and the cache still serves the old version until TTL expires. For a sixty-second TTL, that's up to a minute of stale data after every change.
+Our cache works, but there's a problem. Update a book's description in the database and the cache still serves the old version until TTL expires. For our five-minute TTL, that's up to five minutes of stale data after every change.
 
 Here's what the write path needs to look like:
 
@@ -519,7 +527,7 @@ We just used `cache.invalidate_pattern("genre:*")` in the edit route. It cleared
 
 Pattern-based invalidation becomes the clear choice when relationships are many-to-many, when a write could affect entries you can't enumerate cheaply, or when you're doing bulk operations (importing a CSV of new books, for example).
 
-If things went sideways, completed files are in `safety/`.
+You know by now, but, as a reminder, safety files are in the `safety` directory.
 
 ## Part 5: Understanding the tradeoffs
 
@@ -539,7 +547,7 @@ Caching isn't always the right answer. Write-heavy workloads where data changes 
 
 What we've implemented here is eventual consistency between the database and the cache. After a write, there's a brief window (between the database commit and cache invalidation completing) where the cache entry doesn't exist and the next request fetches fresh data. In practice, that window is microseconds on a local connection.
 
-Here's the harder case. Multiple application instances. Instance A updates the database and invalidates the key. But what about instance B? Valkey solves this because all instances share the same external cache. Once a key is deleted from Valkey, every instance sees the deletion on the next read. That's one of the advantages of an external cache over in-process caching.
+Here's the harder case: Multiple application instances. Instance A updates the database and invalidates the key. But what about instance B? Valkey solves this because all instances share the same external cache. Once a key is deleted from Valkey, every instance sees the deletion on the next read. That's one of the advantages of an external cache over in-process caching.
 
 ### Seeing graceful degradation firsthand
 
@@ -549,7 +557,7 @@ You built graceful degradation into the cache layer (connection errors return sa
 docker compose -f ../docker-compose.yml stop valkey
 ```
 
-Now refresh a page in the browser. The app still works. Query times are back to database speed (single-digit milliseconds), no cache HIT/MISS displayed, and if you look at the Flask console you'll see logged warnings about Valkey connection failures. The application slowed down but didn't crash.
+Now refresh a page in the browser. The app still works. Query times are back to database speed (double-digit milliseconds), the cache status shows MISS on every request (the cache layer attempts the operation, fails, and falls through to the database), and if you look at the terminal where Flask is running you'll see logged warnings about Valkey connection failures. The application slowed down but didn't crash.
 
 Start Valkey again:
 
