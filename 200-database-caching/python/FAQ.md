@@ -88,9 +88,17 @@ Here at the 200-level, invalidation is triggered by a real data change (editing 
 
 Your database has the correct data. The cache still holds the old version. On the next read, stale data is served from the cache until TTL expires. We accept that tradeoff. It's eventual consistency: cache and database can briefly disagree.
 
-In practice, Valkey DEL calls on a local server fail only if Valkey is completely unreachable. If that's the case, the cache layer's error handling returns gracefully and subsequent reads fall through to the database directly (because `is_connected` will return False).
+In practice, Valkey DEL calls on a local server fail only if Valkey is completely unreachable. If that's the case, the cache layer's error handling catches the connection error, logs a warning, and returns gracefully. Subsequent reads attempt the cache, get the same connection error, and fall through to the database automatically.
 
 For applications where this window of staleness is unacceptable, you'd need distributed transactions or a different architecture. That's beyond what we cover here.
+
+### Why does the app attempt the cache even when Valkey is down?
+
+When Valkey is unreachable, the route code still calls `cache.get()` and `cache.set()`. Those methods catch the connection error, log a warning, and return safe defaults (a cache miss and a no-op, respectively). The app then falls through to the database. You'll see "MISS" in the UI and warning lines in your terminal on every request.
+
+An alternative design is to check connectivity once (with a PING) before attempting any cache operations, and skip the cache entirely if it fails. That approach produces cleaner terminal output and avoids the per-request timeout cost of a failed connection attempt. The tradeoff is that you lose visible feedback that something is wrong; the app silently behaves as if caching were disabled.
+
+We chose the current approach for the workshop because it makes graceful degradation observable. You can see the warnings happening in real time and confirm the app continues to serve correct data. In production, you would evaluate whether the added latency from failed connection attempts is acceptable or whether a circuit breaker pattern (stop trying after N failures, periodically re-check) is more appropriate for your use case.
 
 ### Why does the edit route fetch the book detail without using the cache?
 

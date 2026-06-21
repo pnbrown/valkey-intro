@@ -9,6 +9,11 @@ import logging
 import valkey
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s: %(message)s"))
+    logger.addHandler(_handler)
 
 
 class CacheLayer:

@@ -23,7 +23,7 @@ def get_books_by_genre(genre):
                 FROM books b
                 JOIN authors a ON b.author_id = a.id
                 WHERE b.genre = %s
-                ORDER BY b.published_year
+                ORDER BY b.published_year DESC
             """, (genre,))
             return [dict(row) for row in cur.fetchall()]
 
