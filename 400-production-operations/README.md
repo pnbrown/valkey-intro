@@ -1,16 +1,12 @@
 # Production Operations with Valkey Cluster
 
-Placeholder for the 400-level workshop.
+The capstone of the caching track. This workshop takes the patterns from levels 100-300 and runs them on a 6-node Valkey Cluster with connection pooling, eviction policies, automatic failover, and production health checks.
 
-## Planned scope
+## Language implementations
 
-- Connection pooling (psycopg_pool and Valkey connection pools)
-- Valkey Cluster mode (multiple nodes, hash slots, failover)
-- Eviction policies under memory pressure (maxmemory configuration)
-- Custom JSON serialization (handling timestamps, decimals, edge cases)
-- Health checks and readiness probes
-- Observability: monitoring hit rates, latency percentiles, alerting on degradation
-- Read replicas for scaling reads
+| Language | Directory | Status |
+|----------|-----------|--------|
+| Python | [python/](python/) | Available |
 
 ## Prerequisites
 
