@@ -170,7 +170,7 @@ Managed Valkey services handle replication, failover, and scaling so you do not 
 
 Connection pooling reuses a set of open connections to Valkey rather than creating a new connection for every request. The valkey-py client uses a connection pool by default. The `Valkey()` constructor in `cache_layer.py` creates a pool automatically; you do not need to configure it manually for this workshop.
 
-In high-traffic production applications, you may need to tune pool size. The [valkey-py documentation](https://github.com/valkey-io/valkey-py) covers connection pool configuration.
+In high-traffic production applications, you may need to tune pool size. The [valkey-py documentation](https://valkey-py.readthedocs.io/en/latest/) covers connection pool configuration.
 
 ### What happens if Valkey runs out of memory?
 
@@ -182,7 +182,7 @@ The [Valkey eviction documentation](https://valkey.io/topics/lru-cache/) explain
 
 The valkey-py library is a fork of redis-py, created specifically for Valkey. The API is nearly identical. If you have used redis-py before, valkey-py will feel familiar. The main differences are the import name (`import valkey` instead of `import redis`) and that valkey-py tracks Valkey-specific features and releases.
 
-The [valkey-py repository](https://github.com/valkey-io/valkey-py) has migration notes for anyone coming from redis-py.
+The [valkey-py repository](https://valkey-py.readthedocs.io/en/latest/) has migration notes for anyone coming from redis-py.
 
 ---
 
@@ -190,7 +190,7 @@ The [valkey-py repository](https://github.com/valkey-io/valkey-py) has migration
 
 - [Valkey documentation](https://valkey.io/docs/) covers all commands, data types, configuration, and deployment options.
 - [Valkey blog](https://valkey.io/blog/) publishes technical deep-dives and release announcements.
-- [valkey-py client library](https://github.com/valkey-io/valkey-py) is the Python client used in this workshop.
+- [valkey-py client library](https://valkey-py.readthedocs.io/en/latest/) is the Python client used in this workshop.
 - [Valkey command reference](https://valkey.io/commands/) provides detailed documentation for every command, including the [GET](https://valkey.io/commands/get/), [SET](https://valkey.io/commands/set/), [DEL](https://valkey.io/commands/del/), [EXPIRE](https://valkey.io/commands/expire/), and [TTL](https://valkey.io/commands/ttl/) commands used in this workshop.
 - [Flask documentation](https://flask.palletsprojects.com/) is the official reference for the web framework used in this workshop.
 - [Flask quickstart](https://flask.palletsprojects.com/quickstart/) covers routing, templates, and request handling.
