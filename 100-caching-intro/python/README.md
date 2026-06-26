@@ -527,7 +527,7 @@ For deeper coverage of Valkey's capabilities, including data structures, persist
 
 - [Valkey documentation](https://valkey.io/docs/)
 - [Valkey blog](https://valkey.io/blog/)
-- [valkey-py client library](https://github.com/valkey-io/valkey-py)
+- [valkey-py client library](https://valkey-py.readthedocs.io/en/latest/)
 
 ## Contributing
 
