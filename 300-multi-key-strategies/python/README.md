@@ -464,7 +464,7 @@ Run the provided concurrent load test (from the `python/` directory):
 python load_test.py
 ```
 
-The script uses `concurrent.futures` to fire parallel requests and reports results. Verify that:
+The script uses `concurrent.futures` to send parallel requests and reports results. Verify that:
 
 - Warming eliminates cold start misses
 - Mutex prevents duplicate database queries under concurrency

@@ -73,7 +73,7 @@ Both `valkey` and `postgres` should show "healthy."
 
 **Cause:** Another process (or a previous instance of the app) is using port 5000. On macOS, AirPlay Receiver sometimes claims this port.
 
-**Fix:** Kill the existing process (`lsof -i :5000` to find it, then `kill <PID>`). Or start the app on a different port: `flask run --port 5001`.
+**Fix:** Stop the existing process (`lsof -i :5000` to find it, then `kill <PID>`). Or start the app on a different port: `flask run --port 5001`.
 
 ## psycopg connection error on seed_db.py
 
