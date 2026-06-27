@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ book.title }} - Bookstore</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        h1 { color: #333; }
+        .meta { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+        .description { line-height: 1.6; }
+        .author-bio { background: #f8f9fa; padding: 1rem; border-radius: 4px; margin: 1.5rem 0; }
+        .author-bio h3 { margin: 0 0 0.5rem 0; }
+        .actions { margin-top: 1.5rem; }
+        .actions a { color: #0066cc; text-decoration: none; margin-right: 1.5rem; }
+        .actions a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>{{ book.title }}</h1>
+    <div class="meta">
+        {{ book.genre | capitalize }} | {{ book.published_year }} | {{ elapsed_ms }}ms | Cache: {{ cache_status }}
+    </div>
+
+    <div class="description">
+        <p>{{ book.description }}</p>
+    </div>
+
+    <div class="author-bio">
+        <h3>{{ book.author_name }}</h3>
+        <p>{{ book.author_bio }}</p>
+    </div>
+
+    <div class="actions">
+        <a href="{{ url_for('edit_book', book_id=book.id) }}">Edit description</a>
+        <a href="{{ url_for('genre_listing', genre=book.genre) }}">Back to {{ book.genre }}</a>
+        <a href="{{ url_for('home') }}">All genres</a>
+    </div>
+</body>
+</html>

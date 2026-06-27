@@ -31,13 +31,11 @@ request → cache check               form POST → database UPDATE
 
 The key insight: cache invalidation must mirror your data relationships. When a book changes, both the book cache and the genre listing cache are affected.
 
-## Choose your language
+## Language implementations
 
-| Language | Status | Directory |
-|----------|--------|-----------|
-| Python   | Complete | [python/](python/) |
-
-Pick a language and follow the README inside that directory.
+| Language | Directory | Status |
+|----------|-----------|--------|
+| Python | [python/](python/) | Available |
 
 ## Infrastructure
 
