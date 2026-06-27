@@ -1,6 +1,6 @@
-# Multi-Key Strategies and Cache Stampedes
+# Protecting the Cache Layer with Valkey
 
-Teaches the failure modes that emerge under concurrency: cache stampedes, cold starts, and operational blind spots. Covers cache warming with pipelines, mutex-based stampede prevention, circuit breakers, and observability with INFO stats.
+Teaches the failure modes that emerge under real traffic: cache stampedes, cold starts, and operational blind spots. Covers cache warming with pipelines, mutex-based stampede prevention, circuit breakers, and observability with INFO stats.
 
 ## Language implementations
 

@@ -1,4 +1,4 @@
-# Multi-Key Strategies and Cache Stampedes
+# Protecting the Cache Layer with Valkey
 
 In the 200-level workshop you cached database queries and invalidated them on write. The pattern worked because your traffic was you, alone, clicking links in a browser. Production traffic is not one person clicking links. It is hundreds, maybe thousands, of concurrent requests hitting the same endpoint at the same moment a cache key expires. When that happens, every request simultaneously discovers the cache is empty and races to rebuild it from the database. The database gets slammed with duplicate work. That is called a cache stampede.
 
