@@ -1,0 +1,145 @@
+# Docker Compose configuration for a 6-node Valkey Cluster + PostgreSQL.
+#
+# Architecture:
+#   - 3 primary nodes (valkey-1, valkey-2, valkey-3)
+#   - 3 replica nodes (valkey-4, valkey-5, valkey-6)
+#   - 1 cluster initializer (runs once, forms the cluster, then exits)
+#   - 1 PostgreSQL instance
+#
+# Ports exposed to the host:
+#   - 7001-7006: Valkey nodes (client ports)
+#   - 5432: PostgreSQL
+#
+# Start with: docker compose up -d
+# Stop with:  docker compose down -v
+
+x-valkey-common: &valkey-common
+  image: valkey/valkey:latest
+  command: >
+    valkey-server
+    --port 6379
+    --cluster-enabled yes
+    --cluster-config-file nodes.conf
+    --cluster-node-timeout 5000
+    --maxmemory 16mb
+    --maxmemory-policy allkeys-lru
+    --appendonly no
+    --save ""
+  healthcheck:
+    test: ["CMD", "valkey-cli", "ping"]
+    interval: 3s
+    timeout: 2s
+    retries: 5
+
+services:
+  valkey-1:
+    <<: *valkey-common
+    ports:
+      - "7001:6379"
+    networks:
+      valkey-cluster:
+        ipv4_address: 172.30.0.11
+
+  valkey-2:
+    <<: *valkey-common
+    ports:
+      - "7002:6379"
+    networks:
+      valkey-cluster:
+        ipv4_address: 172.30.0.12
+
+  valkey-3:
+    <<: *valkey-common
+    ports:
+      - "7003:6379"
+    networks:
+      valkey-cluster:
+        ipv4_address: 172.30.0.13
+
+  valkey-4:
+    <<: *valkey-common
+    ports:
+      - "7004:6379"
+    networks:
+      valkey-cluster:
+        ipv4_address: 172.30.0.14
+
+  valkey-5:
+    <<: *valkey-common
+    ports:
+      - "7005:6379"
+    networks:
+      valkey-cluster:
+        ipv4_address: 172.30.0.15
+
+  valkey-6:
+    <<: *valkey-common
+    ports:
+      - "7006:6379"
+    networks:
+      valkey-cluster:
+        ipv4_address: 172.30.0.16
+
+  cluster-init:
+    image: valkey/valkey:latest
+    depends_on:
+      valkey-1:
+        condition: service_healthy
+      valkey-2:
+        condition: service_healthy
+      valkey-3:
+        condition: service_healthy
+      valkey-4:
+        condition: service_healthy
+      valkey-5:
+        condition: service_healthy
+      valkey-6:
+        condition: service_healthy
+    networks:
+      valkey-cluster:
+        ipv4_address: 172.30.0.20
+    command: >
+      sh -c "
+        echo 'Waiting for nodes to be ready...' &&
+        sleep 2 &&
+        valkey-cli --cluster create
+          172.30.0.11:6379
+          172.30.0.12:6379
+          172.30.0.13:6379
+          172.30.0.14:6379
+          172.30.0.15:6379
+          172.30.0.16:6379
+          --cluster-replicas 1
+          --cluster-yes &&
+        echo 'Cluster creation successful.'
+      "
+    restart: "no"
+
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: workshop
+      POSTGRES_PASSWORD: workshop
+      POSTGRES_DB: bookstore
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workshop -d bookstore"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      valkey-cluster:
+        ipv4_address: 172.30.0.30
+
+networks:
+  valkey-cluster:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  pgdata:

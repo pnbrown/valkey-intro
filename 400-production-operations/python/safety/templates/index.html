@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bookstore - 400 Workshop</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        h1 { color: #333; }
+        .genre-list { list-style: none; padding: 0; }
+        .genre-list li { margin: 0.5rem 0; }
+        .genre-list a { color: #0066cc; text-decoration: none; font-size: 1.1rem; }
+        .genre-list a:hover { text-decoration: underline; }
+        .flash { background: #fff3cd; border: 1px solid #ffc107; padding: 0.75rem; margin: 1rem 0; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Bookstore</h1>
+    <p>400-level workshop: Production Operations with Valkey Cluster</p>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    {% for message in messages %}
+    <div class="flash">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    {% if genres %}
+    <h2>Genres</h2>
+    <ul class="genre-list">
+        {% for genre in genres %}
+        <li><a href="{{ url_for('genre_listing', genre=genre) }}">{{ genre | capitalize }}</a></li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No genres found. Have you run <code>python seed_db.py</code>?</p>
+    {% endif %}
+</body>
+</html>

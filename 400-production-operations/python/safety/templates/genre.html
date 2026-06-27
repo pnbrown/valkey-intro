@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ genre | capitalize }} - Bookstore</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        h1 { color: #333; }
+        .meta { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+        .book { border-bottom: 1px solid #eee; padding: 1rem 0; }
+        .book h3 { margin: 0 0 0.25rem 0; }
+        .book h3 a { color: #0066cc; text-decoration: none; }
+        .book h3 a:hover { text-decoration: underline; }
+        .book .author { color: #666; font-size: 0.9rem; }
+        .back { display: inline-block; margin-top: 1.5rem; color: #0066cc; text-decoration: none; }
+        .back:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>{{ genre | capitalize }}</h1>
+    <div class="meta">
+        {{ books | length }} book(s) | {{ elapsed_ms }}ms | Cache: {{ cache_status }}
+    </div>
+
+    {% for book in books %}
+    <div class="book">
+        <h3><a href="{{ url_for('book_detail', book_id=book.id) }}">{{ book.title }}</a></h3>
+        <p class="author">{{ book.author_name }} ({{ book.published_year }})</p>
+    </div>
+    {% endfor %}
+
+    <a class="back" href="{{ url_for('home') }}">Back to genres</a>
+</body>
+</html>
