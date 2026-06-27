@@ -182,7 +182,7 @@ The [Valkey eviction documentation](https://valkey.io/topics/lru-cache/) explain
 
 The valkey-py library is a fork of redis-py, created specifically for Valkey. The API is nearly identical. If you have used redis-py before, valkey-py will feel familiar. The main differences are the import name (`import valkey` instead of `import redis`) and that valkey-py tracks Valkey-specific features and releases.
 
-The [valkey-py documentation](https://valkey-py.readthedocs.io/en/latest/) has migration notes for anyone coming from redis-py.
+Migration notes for anyone coming from redis-py are available in the [valkey-py repository](https://valkey-py.readthedocs.io/en/latest/).
 
 ---
 

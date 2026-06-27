@@ -1,11 +1,8 @@
 """
 Cache Layer module - wraps Valkey operations for the bookstore application.
 
-This builds on the cache layer from the 100-level workshop. The core operations
-(get, set, invalidate) are the same, with the addition of pattern-based
-invalidation for clearing multiple related keys at once.
-
-You will fill in the new method in Part 3 of the workshop.
+Builds on the 100-level cache layer with the addition of pattern-based
+invalidation. You will complete the invalidate_pattern method in Part 3.
 """
 
 import json
@@ -60,24 +57,8 @@ class CacheLayer:
             return False
 
     def invalidate_pattern(self, pattern):
-        """
-        Remove all keys matching a glob pattern.
-
-        This is useful for invalidating all cached entries related to a
-        particular entity (e.g., all genre listings after a book update).
-
-        Should return the number of keys removed.
-
-        Steps:
-        1. Use self._client.scan_iter(match=pattern) to find matching keys
-        2. Delete each matching key
-        3. Return the total count of deleted keys
-        4. Catch connection errors and return 0
-
-        Note: SCAN is preferred over KEYS in production because it does not
-        block the server. For this workshop's small dataset, either works.
-        """
-        # TODO: Implement pattern-based invalidation here
+        """Remove all keys matching a glob pattern. Returns count of keys removed.
+        See Part 3 in the README."""
         return 0
 
     @property
