@@ -95,14 +95,11 @@ Writing 10 cache keys means 10 network round-trips to Valkey. A pipeline batches
 
 ### Implementation
 
-Open `warm_cache.py`. Replace the TODO stub inside `warm_cache()` with the following:
+Open `warm_cache.py`. Replace the entire body of `warm_cache()` (everything below the docstring, including the `logger.info` placeholder) with the following:
 
 ```python
 def warm_cache(cache):
-    """
-    Pre-populate the cache with genre listings and the genre list.
-    Uses a Valkey pipeline to batch all writes into one network round-trip.
-    """
+    """Pre-populate the cache with genre listings at startup."""
     from db import get_all_genres, get_books_by_genre
 
     start = time.perf_counter()
@@ -134,7 +131,7 @@ def warm_cache(cache):
 
 The function queries the database for all genres and their book listings, queues every SET into a single pipeline, then executes them in one network round-trip. If anything fails (Valkey down, database unreachable), it logs a warning and lets the app start anyway. A failed warm is not fatal; the cache-aside pattern from the 200-level still works, just without the head start.
 
-Now open `app.py` and find the TODO comment near the top (after the `cache = CacheLayer(...)` block). Replace it with:
+Now open `app.py` and find the comment `# Part 1: Call warm_cache() here at startup.` Replace that comment and the line below it with:
 
 ```python
 # Cache warming at startup (Part 1)
@@ -190,52 +187,52 @@ Flask handles requests synchronously (one thread per request in the default thre
 
 ### Implementation
 
-Open `cache_layer.py` and find the `get_with_lock()` method. Replace the TODO stub with the following:
+Open `cache_layer.py` and find the `get_with_lock()` method. Replace the entire method body (everything below `def get_with_lock`) with the following. This is copy-pasteable as a complete method:
 
 ```python
-def get_with_lock(self, key, lock_ttl=5, wait_time=0.1, max_retries=3):
-    """
-    Retrieve a cached entry with stampede prevention.
+    def get_with_lock(self, key, lock_ttl=5, wait_time=0.1, max_retries=3):
+        """
+        Retrieve a cached entry with stampede prevention.
 
-    Returns (data, is_hit, is_rebuilder).
-    """
-    if self._circuit_is_open():
-        return (None, False, False)
+        Returns (data, is_hit, is_rebuilder).
+        """
+        if self._circuit_is_open():
+            return (None, False, False)
 
-    try:
-        # Check cache first
-        raw = self._client.get(key)
-        if raw is not None:
-            self._record_success()
-            return (json.loads(raw), True, False)
-
-        # Cache miss. Try to acquire the lock.
-        lock_key = f"lock:{key}"
-        acquired = self._client.set(lock_key, "1", nx=True, ex=lock_ttl)
-
-        if acquired:
-            self._record_success()
-            return (None, False, True)
-
-        # Lock not acquired. Another request is rebuilding. Wait and retry.
-        for _ in range(max_retries):
-            _time.sleep(wait_time)
+        try:
+            # Check cache first
             raw = self._client.get(key)
             if raw is not None:
                 self._record_success()
                 return (json.loads(raw), True, False)
 
-        # Retries exhausted. Fall through to database.
-        self._record_success()
-        return (None, False, False)
+            # Cache miss. Try to acquire the lock.
+            lock_key = f"lock:{key}"
+            acquired = self._client.set(lock_key, "1", nx=True, ex=lock_ttl)
 
-    except (valkey.ConnectionError, valkey.TimeoutError) as exc:
-        logger.warning("Valkey connection error on get_with_lock('%s'): %s", key, exc)
-        self._record_failure()
-        return (None, False, False)
-    except (json.JSONDecodeError, TypeError) as exc:
-        logger.warning("Deserialization error on get_with_lock('%s'): %s", key, exc)
-        return (None, False, False)
+            if acquired:
+                self._record_success()
+                return (None, False, True)
+
+            # Lock not acquired. Another request is rebuilding. Wait and retry.
+            for _ in range(max_retries):
+                _time.sleep(wait_time)
+                raw = self._client.get(key)
+                if raw is not None:
+                    self._record_success()
+                    return (json.loads(raw), True, False)
+
+            # Retries exhausted. Fall through to database.
+            self._record_success()
+            return (None, False, False)
+
+        except (valkey.ConnectionError, valkey.TimeoutError) as exc:
+            logger.warning("Valkey connection error on get_with_lock('%s'): %s", key, exc)
+            self._record_failure()
+            return (None, False, False)
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.warning("Deserialization error on get_with_lock('%s'): %s", key, exc)
+            return (None, False, False)
 ```
 
 Notice that this method talks to `self._client` directly rather than calling `self.get()`. That is intentional. The lock acquisition and the cache check need to happen in a tight sequence without the overhead of re-checking the circuit breaker or re-wrapping JSON on every retry. The circuit check happens once at the top.
@@ -246,10 +243,9 @@ The three possible return values tell the caller what to do:
 - `(None, False, True)`: you acquired the lock, you are the rebuilder. Query the DB, call `cache.set()`, then call `cache.release_lock()`.
 - `(None, False, False)`: retries exhausted or error. Fall through to the database without locking.
 
-Now open `app.py` and find the `genre_listing` route. Replace the cache block (the section under `if CACHE_ENABLED and cache is not None:`) with:
+Now open `app.py` and find the `genre_listing` route. Replace the cache block (the section between `if CACHE_ENABLED and cache is not None:` and `else:`) with the following. Note the 8-space indentation; it sits inside the route function's `if` block:
 
 ```python
-    if CACHE_ENABLED and cache is not None:
         data, is_hit, is_rebuilder = cache.get_with_lock(cache_key)
 
         if is_hit:
@@ -264,25 +260,37 @@ Now open `app.py` and find the `genre_listing` route. Replace the cache block (t
             # Retries exhausted or error. Fall through to DB.
             books = get_books_by_genre(genre)
             cache_status = "MISS"
-    else:
-        books = get_books_by_genre(genre)
 ```
 
 The route now handles all three cases. Only the rebuilder queries the database and writes back to the cache. Everyone else either gets the cached value or, in the worst case, falls through to a direct database query without holding a lock.
 
 ### Observing it
 
-Simulate concurrent requests using a simple script (or `curl` in a loop) and watch:
+First, flush the cache and restart the app so you start with a cold cache (no warming, to isolate the stampede behavior):
 
-- In `valkey-cli MONITOR`: only one `SET genre:fantasy ...` appears despite multiple simultaneous requests
-- The `lock:genre:fantasy` key appears briefly and disappears
-- Database query count (visible in app logs) stays at 1 instead of N
+```bash
+docker compose exec valkey valkey-cli FLUSHALL
+```
 
-Run the monitor in a second terminal (from the `300-multi-key-strategies` directory):
+Start `valkey-cli MONITOR` in a second terminal (from the `300-multi-key-strategies` directory):
 
 ```bash
 docker compose exec valkey valkey-cli MONITOR
 ```
+
+Now, in a third terminal, send 10 concurrent requests to the same genre endpoint. This one-liner uses `curl` and background processes:
+
+```bash
+for i in $(seq 1 10); do curl -s http://localhost:5000/genre/fantasy > /dev/null & done; wait
+```
+
+In the MONITOR output, you should see:
+
+- Only one `SET genre:fantasy ...` command (the rebuilder wrote to cache)
+- A `SET lock:genre:fantasy ...` with NX and EX flags (the lock acquisition)
+- A `DEL lock:genre:fantasy` (the lock release after rebuild)
+
+Without the mutex, you would see 10 separate SET commands for the same key. With it, only one request queried the database.
 
 ## Part 3: Circuit breaker for Valkey failures
 
@@ -300,34 +308,34 @@ Three states:
 
 ### Implementation
 
-Open `cache_layer.py` and find the three circuit breaker methods. Replace each TODO stub with the following implementations:
+Open `cache_layer.py` and find the three circuit breaker methods (`_circuit_is_open`, `_record_failure`, `_record_success`). Replace each method body with the following. These are copy-pasteable as complete methods:
 
 ```python
-def _circuit_is_open(self):
-    """Check if the circuit breaker is open."""
-    if self._circuit_opened_at is None:
-        return False
-    elapsed = _time.time() - self._circuit_opened_at
-    if elapsed >= self._circuit_cooldown:
-        # Half-open: allow one probe
-        return False
-    return True
+    def _circuit_is_open(self):
+        """Check if the circuit breaker is open."""
+        if self._circuit_opened_at is None:
+            return False
+        elapsed = _time.time() - self._circuit_opened_at
+        if elapsed >= self._circuit_cooldown:
+            # Half-open: allow one probe
+            return False
+        return True
 
-def _record_failure(self):
-    """Record a connection failure. Open the circuit if threshold is reached."""
-    self._failure_count += 1
-    if self._failure_count >= self._circuit_threshold:
-        self._circuit_opened_at = _time.time()
-        logger.warning(
-            "Circuit breaker opened after %d failures", self._failure_count
-        )
+    def _record_failure(self):
+        """Record a connection failure. Open the circuit if threshold is reached."""
+        self._failure_count += 1
+        if self._failure_count >= self._circuit_threshold:
+            self._circuit_opened_at = _time.time()
+            logger.warning(
+                "Circuit breaker opened after %d failures", self._failure_count
+            )
 
-def _record_success(self):
-    """Record a successful operation. Close the circuit if it was open."""
-    if self._circuit_opened_at is not None:
-        logger.warning("Circuit breaker closed, Valkey recovered")
-    self._failure_count = 0
-    self._circuit_opened_at = None
+    def _record_success(self):
+        """Record a successful operation. Close the circuit if it was open."""
+        if self._circuit_opened_at is not None:
+            logger.warning("Circuit breaker closed, Valkey recovered")
+        self._failure_count = 0
+        self._circuit_opened_at = None
 ```
 
 The logic is simple. `_circuit_is_open()` returns `True` only when the circuit has been tripped and the cooldown has not yet elapsed. Once the cooldown passes, it returns `False` (the half-open state), which allows exactly one request through as a probe. If that probe succeeds, `_record_success()` resets everything and the circuit closes. If it fails, `_record_failure()` re-opens the circuit with a fresh timestamp.
@@ -367,43 +375,43 @@ Hit rate = `keyspace_hits / (keyspace_hits + keyspace_misses)`
 
 ### Implementation
 
-Open `cache_layer.py` and find the `get_stats()` method. Replace the TODO stub with:
+Open `cache_layer.py` and find the `get_stats()` method. Replace the entire method body with:
 
 ```python
-def get_stats(self):
-    """Retrieve cache statistics from Valkey's INFO command."""
-    if self._circuit_is_open():
-        return None
+    def get_stats(self):
+        """Retrieve cache statistics from Valkey's INFO command."""
+        if self._circuit_is_open():
+            return None
 
-    try:
-        stats = self._client.info("stats")
-        memory = self._client.info("memory")
-        clients = self._client.info("clients")
-        total_keys = self._client.dbsize()
+        try:
+            stats = self._client.info("stats")
+            memory = self._client.info("memory")
+            clients = self._client.info("clients")
+            total_keys = self._client.dbsize()
 
-        hits = stats.get("keyspace_hits", 0)
-        misses = stats.get("keyspace_misses", 0)
-        total = hits + misses
-        hit_rate = hits / total if total > 0 else 0.0
+            hits = stats.get("keyspace_hits", 0)
+            misses = stats.get("keyspace_misses", 0)
+            total = hits + misses
+            hit_rate = hits / total if total > 0 else 0.0
 
-        self._record_success()
-        return {
-            "hit_rate": round(hit_rate, 4),
-            "keyspace_hits": hits,
-            "keyspace_misses": misses,
-            "used_memory_human": memory.get("used_memory_human", "unknown"),
-            "connected_clients": clients.get("connected_clients", 0),
-            "total_keys": total_keys,
-        }
-    except (valkey.ConnectionError, valkey.TimeoutError) as exc:
-        logger.warning("Valkey connection error on get_stats(): %s", exc)
-        self._record_failure()
-        return None
+            self._record_success()
+            return {
+                "hit_rate": round(hit_rate, 4),
+                "keyspace_hits": hits,
+                "keyspace_misses": misses,
+                "used_memory_human": memory.get("used_memory_human", "unknown"),
+                "connected_clients": clients.get("connected_clients", 0),
+                "total_keys": total_keys,
+            }
+        except (valkey.ConnectionError, valkey.TimeoutError) as exc:
+            logger.warning("Valkey connection error on get_stats(): %s", exc)
+            self._record_failure()
+            return None
 ```
 
 The method calls `INFO` with specific sections rather than fetching the entire info dump. This keeps the response focused and avoids parsing hundreds of irrelevant fields. `dbsize()` is a separate command that returns the total number of keys in the current database.
 
-Now open `app.py` and find the `/stats` route. Replace the stub with:
+Now open `app.py` and find the `/stats` route. Replace the entire route function (from `@app.route("/stats")` to the `return` statement) with:
 
 ```python
 @app.route("/stats")
