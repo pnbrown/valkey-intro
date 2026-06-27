@@ -12,7 +12,7 @@ Cache-aside pattern, TTL expiration, manual invalidation. We use a simulated slo
 
 Replace the simulated delay with a real PostgreSQL database. You'll cache real query results, wire up write-through invalidation tied to database writes, and implement pattern-based invalidation for clearing groups of related keys.
 
-### 300-Level: Multi-Key Strategies and Cache Stampedes
+### 300-Level: Protecting the Caching Layer with Valkey
 
 Here the application grows to serve different data types (user profiles, product listings, session data) with different TTL strategies per type. We cover cache warming, handling cache stampedes (thundering herd), and request coalescing to prevent multiple simultaneous fetches for the same key.
 
