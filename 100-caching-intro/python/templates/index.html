@@ -5,26 +5,110 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Valkey Caching Workshop</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; color: #333; }
-        form { margin: 20px 0; }
-        label { display: block; margin-bottom: 6px; font-weight: 500; }
-        input[type="text"] { padding: 8px 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; width: 250px; }
-        button { padding: 8px 16px; font-size: 1rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #1d4ed8; }
-        .timing-info { margin: 20px 0; padding: 12px 16px; background: #f3f4f6; border-radius: 6px; display: flex; gap: 24px; }
-        .timing-info span { font-weight: 500; }
-        .facts-list { list-style: disc; padding-left: 20px; }
-        .facts-list li { margin-bottom: 8px; line-height: 1.5; }
-        .cache-warning { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; }
-        .flash-message { background: #fee2e2; border: 1px solid #ef4444; color: #991b1b; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 700px;
+            margin: 40px auto;
+            padding: 0 20px;
+            color: #333;
+        }
+
+        h1 {
+            color: #1a1a1a;
+        }
+
+        form {
+            margin: 20px 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        input[type="text"] {
+            padding: 8px 12px;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 250px;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 1rem;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .timing-info {
+            margin: 20px 0;
+            padding: 12px 16px;
+            background: #f3f4f6;
+            border-radius: 6px;
+            display: flex;
+            gap: 24px;
+        }
+
+        .response-time {
+            font-weight: 500;
+        }
+
+        .cache-status {
+            font-weight: 500;
+        }
+
+        .facts-list {
+            list-style: disc;
+            padding-left: 20px;
+        }
+
+        .facts-list li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .cache-warning {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .flash-message {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
     </style>
 </head>
 <body>
     <h1>Valkey Caching Workshop</h1>
 
-    <!-- TODO: Paste the flash messages block here (Part 2) -->
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="flash-message" role="alert">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-    <!-- TODO: Paste the cache warning block here (Part 2) -->
+    {% if cache_warning %}
+        <div class="cache-warning" role="alert">{{ cache_warning }}</div>
+    {% endif %}
 
     <form action="/lookup" method="get">
         <label for="topic-input">Enter a topic to look up:</label>
@@ -32,9 +116,20 @@
         <button type="submit">Look up</button>
     </form>
 
-    <!-- TODO: Paste the timing info block here (Part 2) -->
+    {% if elapsed_ms is defined %}
+    <div class="timing-info">
+        <span class="response-time">Response time: {{ elapsed_ms }} ms</span>
+        <span class="cache-status">Cache: {{ cache_status }}</span>
+    </div>
+    {% endif %}
 
-    <!-- TODO: Paste the facts display block here (Part 2) -->
-
+    {% if facts %}
+    <h2>Facts about "{{ topic }}"</h2>
+    <ul class="facts-list">
+        {% for fact in facts %}
+            <li>{{ fact }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
 </body>
 </html>

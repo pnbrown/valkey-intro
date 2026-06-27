@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bookstore - Valkey Caching Workshop</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; color: #333; }
+        a { color: #2563eb; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .genre-list { list-style: none; padding: 0; }
+        .genre-list li { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; }
+        .genre-list li:last-child { border-bottom: none; }
+        .flash-message { background: #fee2e2; border: 1px solid #ef4444; color: #991b1b; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <h1>Bookstore Catalog</h1>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="flash-message" role="alert">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <p>Browse books by genre:</p>
+
+    {% if genres %}
+    <ul class="genre-list">
+        {% for genre in genres %}
+            <li><a href="/genre/{{ genre }}">{{ genre | capitalize }}</a></li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No genres found. Make sure the database is seeded.</p>
+    {% endif %}
+</body>
+</html>

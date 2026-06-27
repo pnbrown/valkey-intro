@@ -26,11 +26,11 @@ _FACTS_DATABASE = {
         "Python was created by Guido van Rossum and first released in 1991.",
         "Python uses indentation to define code blocks instead of curly braces.",
         "Python supports multiple programming paradigms including procedural, object-oriented, and functional.",
-        "The Python Package Index (PyPI) hosts over 400,000 packages.",
+        "The Python Package Index (PyPI) hosts hundreds of thousands of packages.",
         "Python is dynamically typed and garbage-collected.",
     ],
     "docker": [
-        "Docker uses OS-level virtualization to deliver software in containers.",
+        "Docker packages applications into containers using operating system-level virtualization.",
         "Docker containers share the host system kernel, making them lighter than virtual machines.",
         "A Dockerfile defines the steps to build a container image.",
         "Docker Hub is a public registry for sharing container images.",

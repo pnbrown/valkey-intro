@@ -1,4 +1,4 @@
-# A Developer's Introduction to Caching with Valkey
+# 100: Introduction to Caching with Valkey
 
 Learn what caching is, why it matters, and how to add a Valkey caching layer to a web application. Covers the cache-aside pattern, TTL expiration, and manual invalidation.
 
