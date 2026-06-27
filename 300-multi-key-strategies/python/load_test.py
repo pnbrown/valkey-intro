@@ -18,6 +18,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.request import urlopen
 from urllib.error import URLError
+from urllib.parse import quote
 
 
 BASE_URL = "http://localhost:5000"
@@ -53,7 +54,7 @@ def run_load_test(concurrency=20, rounds=3):
     all_results = []
 
     for round_num in range(1, rounds + 1):
-        urls = [f"{BASE_URL}/genre/{genre}" for genre in GENRES]
+        urls = [f"{BASE_URL}/genre/{quote(genre)}" for genre in GENRES]
         # Repeat URLs to create more concurrent requests than unique keys
         urls = urls * (concurrency // len(urls) + 1)
         urls = urls[:concurrency]
