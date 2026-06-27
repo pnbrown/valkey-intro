@@ -1,69 +1,64 @@
 # A Developer's Introduction to Caching with Valkey
 
-By the end of this workshop you'll understand what caching is and where it fits, you'll have added a Valkey caching layer to a web application and watched the performance difference firsthand, and you'll understand cache expiration and manual invalidation.
+Welcome to A Developer's Introduction to Caching with Valkey.
 
-To complete this workshop, you'll need Python 3.9 or later, Docker running on your machine, a text editor, a terminal, and git. That's it.
+By the end of this workshop you'll have achieved three outcomes:
+1. You'll understand what caching is, why it matters, and where it fits in application architecture
+2. You'll be able to add a Valkey caching layer to a web application and observe the performance difference
+3. You'll understand cache expiration and manual invalidation
+
+To complete this workshop, you'll need Python 3.9 or later, Docker running on your machine, a text editor, and a terminal. The implementation files live in the `python/` subdirectory. All commands in this guide should be run from within that directory unless noted otherwise.
 
 ## Part 1: What is caching and why should you care?
 
-If there's one sentence that captures caching, it's this: store the result of an expensive operation so you don't have to repeat it. That's the whole idea. Everything else is an implementation detail.
+If there's one sentence that captures caching, it's this: store the result of an expensive operation so you don't have to repeat it.
 
 > "A cache stores data so that future requests for that data can be served faster; the data stored in a cache might be the result of an earlier computation or a copy of data stored elsewhere." [Wikipedia, Cache (computing)](https://en.wikipedia.org/wiki/Cache_(computing))
 
-Your web browser caches images so it doesn't re-download them on every page load. DNS servers cache domain lookups so they don't traverse the full hierarchy every time. CDNs cache web content at edge locations. It is the same pattern every time. Something is slow or expensive to produce, so you keep a copy of the result somewhere fast.
+Your web browser caches images so it doesn't re-download them on every page load. DNS servers cache domain lookups so they don't traverse the full hierarchy every time. CDNs cache web content at edge locations. The pattern is the same: something is slow or expensive to produce, so you keep a copy of the result somewhere fast.
 
 ### Why this matters for application developers
 
-Consider a web application that calls an external API on every request. Each call takes two seconds to come back. Every user waits two seconds regardless of whether someone else asked the same question five seconds ago. As traffic grows, the problem compounds. Your API gets hammered with duplicate requests, your latency stays bad, and nobody's happy.
+Consider a web application that calls an external API on every request. The API takes two seconds to respond. Every user waits two seconds regardless of whether someone else asked the same question five seconds ago. As traffic grows, the problem compounds. The API gets hammered with duplicate requests, your latency stays bad, and nobody's happy.
 
-Caching breaks this cycle. The first request pays the full cost. Every subsequent request for the same data returns instantly from the cache. The [Valkey documentation](https://valkey.io/docs/) identifies caching as one of the primary use cases for in-memory datastores precisely because this access pattern is everywhere.
+Caching breaks this cycle. The first request pays the full cost. Every subsequent request for the same data returns instantly from the cache. The [Valkey documentation](https://valkey.io/docs/) identifies caching as one of the primary use cases for in-memory datastores precisely because this access pattern is so common.
 
-Caching also introduces complexity. A cache can become a critical dependency. Cached data grows stale over time. These tradeoffs are real. In this workshop, you'll experience both the performance win and the staleness problem firsthand.
+Caching also introduces complexity. A cache can become a critical dependency. Cached data grows stale over time. These tradeoffs are real, and understanding them is part of learning to use caching effectively. In this workshop, you'll experience both sides firsthand.
 
 ### Where caching fits in the architecture
 
-We're implementing a pattern called "cache-aside" (also known as "lazy caching"). The application manages the cache. The cache doesn't talk to the data source. Your code checks the cache, decides whether to fetch from the source, and writes the result back when it does. The cache is "aside" from the main data path: it only gets populated when the application explicitly puts data there.
+The pattern we're implementing is called "cache-aside" (also known as "lazy caching"). In this pattern, the application is responsible for managing the cache. The cache does not talk to the data source directly. Instead, your application code checks the cache, decides whether to fetch from the source, and writes the result back to the cache when it does. The cache is "aside" from the main data path: it only gets populated when the application explicitly puts data there.
 
-The request flow:
+The request flow works like this:
 
 1. Application receives a request
 2. Check the cache for existing data
 3. **Cache hit**: data exists, return it immediately
 4. **Cache miss**: fetch from the slow source, store the result in the cache, return it
 
-That's it. The cache layer sits between the route handler and the data source. If the data's there, it skips the slow source entirely.
+The cache layer sits between your route handler and your data source. When the handler needs data, it checks the cache first. If the data's there, it skips the slow source entirely.
 
 ### Three definitions you need
 
-**Caching** stores the results of expensive operations so repeated requests don't repeat the original work.
+**Caching** is storing the results of expensive operations in a fast-access layer so repeated requests don't repeat the original work.
 
-**Time-to-live (TTL)** is how long a cached entry remains valid before it's automatically removed. Set a key with a thirty-second TTL and Valkey deletes it after thirty seconds. The [Valkey TTL command documentation](https://valkey.io/commands/ttl/) covers the mechanics.
+**Time-to-live (TTL)** is how long a cached entry remains valid before the system removes it automatically. Set a key with a thirty-second TTL, and Valkey deletes it after thirty seconds. The [Valkey TTL command documentation](https://valkey.io/commands/ttl/) covers the mechanics.
 
-**Cache invalidation** is removing entries before their TTL expires because you know the underlying data has changed. Phil Karlton's observation that this is one of the two hard problems in computer science is quoted constantly for a reason. It gets tricky fast.
+**Cache invalidation** is removing entries before their TTL expires because you know the underlying data has changed. Phil Karlton's often-quoted observation that this is one of the two hard problems in computer science speaks to how tricky it gets in practice.
 
 ### What's Valkey?
 
-[Valkey](https://valkey.io/) is an open source, in-memory datastore that the [Linux Foundation](https://www.linuxfoundation.org/press/linux-foundation-launches-open-source-valkey-community) hosts and the community maintains. Data is stored in RAM, which means reads and writes complete in sub-millisecond time. For this workshop, we'll use it as a straightforward key/value cache. Store a JSON string under a key, retrieve it later by that same key.
+[Valkey](https://valkey.io/) is an open source, in-memory datastore that the [Linux Foundation](https://www.linuxfoundation.org/press/linux-foundation-launches-open-source-valkey-community) hosts and the community maintains. It stores data in RAM, which means reads and writes complete in sub-millisecond time. For this workshop, you'll use it as a straightforward key/value cache: store a JSON string under a key, retrieve it later by that same key.
 
 ## Part 2: Building the application without a cache
 
-In this part, we complete a Flask web application that fetches data from a deliberately slow source. Every request takes over two seconds. This baseline matters. You need to feel the problem before the solution makes sense.
+In this part, you complete a Flask web application that fetches data from a deliberately slow source. Every request takes over two seconds. This baseline is the point: you need to feel the problem before the solution makes sense.
 
-The project already contains starter files with TODO placeholders. You'll open each file and fill in the missing logic. Code blocks below show the completed version.
-
-You'll need a text editor to modify the project files. Any editor works: VS Code, Sublime Text, Notepad, TextEdit (in plain text mode), or whatever you're comfortable with. If you don't have a preferred editor, [VS Code](https://code.visualstudio.com/) is a free option that works on all platforms.
-
-First clone the repository with git and navigate to that folder.
-```
-git clone https://github.com/pnbrown/valkey-intro.git
-cd valkey-intro/100-caching-intro/python
-```
-
-You may then begin completing the TODO blocks with the provided code below. If you get stuck, read the comments in the code.
+The project already contains starter files with TODO placeholders. You will open each file and fill in the missing logic. The code blocks below show what the completed version looks like, so you know exactly what to paste in.
 
 ### The data source
 
-Open `data_source.py` in your text editor. You'll see a skeleton with TODO comments marking where code needs to go. Replace the TODOs with the following:
+Open `data_source.py` in your text editor. You will see a skeleton with TODO comments marking where code needs to go. Replace the TODOs with the following:
 
 First, replace the empty `_FACTS_DATABASE = {}` with this populated dictionary:
 
@@ -80,11 +75,11 @@ _FACTS_DATABASE = {
         "Python was created by Guido van Rossum and first released in 1991.",
         "Python uses indentation to define code blocks instead of curly braces.",
         "Python supports multiple programming paradigms including procedural, object-oriented, and functional.",
-        "The Python Package Index (PyPI) hosts hundreds of thousands of packages.",
+        "The Python Package Index (PyPI) hosts over 400,000 packages.",
         "Python is dynamically typed and garbage-collected.",
     ],
     "docker": [
-        "Docker packages applications into containers using operating system-level virtualization.",
+        "Docker uses OS-level virtualization to deliver software in containers.",
         "Docker containers share the host system kernel, making them lighter than virtual machines.",
         "A Dockerfile defines the steps to build a container image.",
         "Docker Hub is a public registry for sharing container images.",
@@ -125,13 +120,13 @@ def get_facts(topic):
     }
 ```
 
-We're simulating an expensive external operation with a 2.5-second `time.sleep()`. You can configure the delay via the `SLOW_DELAY_SECONDS` environment variable if you want to speed things up during development.
+This module simulates an expensive external operation with a 2.5-second `time.sleep()`. The delay is configurable via the `SLOW_DELAY_SECONDS` environment variable if you want to speed things up during development.
 
-Output is deterministic. Same topic in, same facts out. This matters when we add caching, because you'll be able to verify that cached responses match fresh ones.
+The output is deterministic: same topic in, same facts out. This matters when you add caching, because you'll be able to verify that cached responses match fresh ones.
 
 ### The Flask application
 
-Open `app.py`. Your starter file has the imports, Flask setup, and the home route already done. You need to fill in the `/lookup` route. Replace the TODO section with:
+Open `app.py`. The starter has the imports, Flask setup, and the home route already done. You need to fill in the `/lookup` route. Replace the TODO section with:
 
 ```python
 @app.route("/lookup")
@@ -158,13 +153,83 @@ def lookup():
     )
 ```
 
-Right now this is the no-cache version. Every request goes straight to the slow data source. Notice how the timing display shows how long each request took, and the cache status reads "DISABLED" because there's no cache yet. We'll change this in Part 4.
+This is the no-cache version. Every request goes straight to the slow data source. The timing display shows how long each request took, and the cache status reads "DISABLED" because there's no cache yet. You'll change this in Part 4.
 
 ### The HTML template
 
-The HTML template lives in `templates/index.html`. The implementation is simple because I have never claimed to be a web/front end designer. If you would like to improve it, feel free. The original implementation is in the safety directory in case you need it.
+Open `templates/index.html`. Replace the placeholder content with:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valkey Caching Workshop</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; color: #333; }
+        form { margin: 20px 0; }
+        label { display: block; margin-bottom: 6px; font-weight: 500; }
+        input[type="text"] { padding: 8px 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; width: 250px; }
+        button { padding: 8px 16px; font-size: 1rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #1d4ed8; }
+        .timing-info { margin: 20px 0; padding: 12px 16px; background: #f3f4f6; border-radius: 6px; display: flex; gap: 24px; }
+        .timing-info span { font-weight: 500; }
+        .facts-list { list-style: disc; padding-left: 20px; }
+        .facts-list li { margin-bottom: 8px; line-height: 1.5; }
+        .cache-warning { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; }
+        .flash-message { background: #fee2e2; border: 1px solid #ef4444; color: #991b1b; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <h1>Valkey Caching Workshop</h1>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="flash-message" role="alert">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {% if cache_warning %}
+        <div class="cache-warning" role="alert">{{ cache_warning }}</div>
+    {% endif %}
+
+    <form action="/lookup" method="get">
+        <label for="topic-input">Enter a topic to look up:</label>
+        <input type="text" id="topic-input" name="topic" placeholder="e.g. valkey, python, docker">
+        <button type="submit">Look up</button>
+    </form>
+
+    {% if elapsed_ms is defined %}
+    <div class="timing-info">
+        <span>Response time: {{ elapsed_ms }} ms</span>
+        <span>Cache: {{ cache_status }}</span>
+    </div>
+    {% endif %}
+
+    {% if facts %}
+    <h2>Facts about "{{ topic }}"</h2>
+    <ul class="facts-list">
+        {% for fact in facts %}
+            <li>{{ fact }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</body>
+</html>
+```
 
 ### Running it
+
+You will need a text editor to modify the project files. Any editor works: VS Code, Sublime Text, Notepad, TextEdit (in plain text mode), or whatever you are comfortable with. If you do not have a preferred editor, [VS Code](https://code.visualstudio.com/) is a free option that works on all platforms.
+
+Navigate into the Python implementation directory. All commands for the rest of this workshop should be run from here:
+
+```bash
+cd python
+```
 
 Set up a virtual environment. This keeps the workshop's dependencies isolated from the rest of your system (and on newer macOS and Ubuntu, `pip install` won't work without one):
 
@@ -174,7 +239,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Copy the example configuration file. Defaults work fine for now, but you'll edit this later when we enable caching:
+Copy the example configuration file. The defaults work fine for now, but you'll edit this later when you enable caching:
 
 ```bash
 cp .env.example .env
@@ -186,9 +251,9 @@ Start the app:
 python app.py
 ```
 
-Flask's built-in development server runs on port 5000. You can also use `flask run` if you prefer, but `python app.py` is simpler for this workshop since it picks up all the configuration automatically.
+This runs Flask's built-in development server on port 5000. You can also use `flask run` if you prefer, but `python app.py` is simpler for this workshop since it picks up all the configuration automatically.
 
-Open [http://localhost:5000](http://localhost:5000). Search for "valkey." Watch the timing display. It takes about 2,500 ms. Search for "valkey" again. Same wait. Nothing is remembered between requests. Every lookup hits the slow source regardless of whether someone already asked for the same data.
+Open [http://localhost:5000](http://localhost:5000). Search for "valkey." Watch the timing display. It takes about 2,500 ms. Search for "valkey" again. Same wait. The application doesn't remember anything between requests. Every lookup hits the slow source regardless of whether someone already asked for the same data.
 
 This is the problem caching solves.
 
@@ -196,11 +261,11 @@ In case something has gone wrong, there are completed files in the `safety/` dir
 
 ## Part 3: Running Valkey locally via Docker
 
-Before we can add caching, we need a Valkey server. Docker gives us one with a single command.
+Before you can add caching, you need a Valkey server. Docker gives you one with a single command.
 
 ### Starting Valkey
 
-We've included a `docker-compose.yml` one level up from the `python/` directory (in the `100-caching-intro/` root). Its contents:
+The workshop includes a `docker-compose.yml` one level up from the `python/` directory (in the `100-caching-intro/` root). Its contents:
 
 ```yaml
 services:
@@ -241,7 +306,7 @@ You should see `PONG`. If you prefer verifying from Python:
 python -c "import valkey; r = valkey.Valkey(); print(r.ping())"
 ```
 
-That prints `True` if the connection succeeds.
+This prints `True` if the connection succeeds.
 
 ### Stopping it
 
@@ -249,15 +314,15 @@ That prints `True` if the connection succeeds.
 docker compose -f ../docker-compose.yml down
 ```
 
-Data is lost when the container is removed. That's fine for a workshop. We get a clean slate every time.
+Data is lost when the container is removed. That's fine for a workshop. You will get a clean slate every time.
 
 ## Part 4: Adding the cache layer
 
-We've got a slow application and a running Valkey server. Time to connect them. This is the part where the 2,500 ms wait turns into 1 ms.
+You've got a slow application and a running Valkey server. Now you connect the two.
 
 ### The cache layer module
 
-Open `cache_layer.py`. You'll see a class skeleton with TODO placeholders in each method. Docstrings in each method describe what it should do, step by step. Fill in the method bodies with the following implementations:
+Open `cache_layer.py`. You will see a class skeleton with TODO placeholders in each method. The docstrings describe what each method should do, step by step. Fill in the method bodies with the following implementations:
 
 **The `get` method:**
 
@@ -310,9 +375,9 @@ Open `cache_layer.py`. You'll see a class skeleton with TODO placeholders in eac
             return False
 ```
 
-What we've built here wraps four Valkey operations: get, set, invalidate, and a connection health check. Data is serialized as JSON. Every method catches connection errors and degrades gracefully. `get` returns `(None, False)`, `set` becomes a no-op, `invalidate` returns `False`. If Valkey goes down, your application slows down but doesn't crash.
+The class wraps four Valkey operations: get, set, invalidate, and a connection health check. Data is serialized as JSON. Every method catches connection errors and degrades gracefully: `get` returns `(None, False)`, `set` becomes a no-op, `invalidate` returns `False`. If Valkey goes down, your application slows down but doesn't crash.
 
-Keys follow the pattern `facts:{topic}`. We chose the `facts:` prefix to namespace our cache entries, and the topic maps directly to the user's input.
+Keys follow the pattern `facts:{topic}`. The `facts:` prefix namespaces cache entries, and the topic maps directly to the user's input.
 
 ### Updating app.py
 
@@ -404,7 +469,7 @@ if __name__ == "__main__":
     app.run(debug=True, port=5000)
 ```
 
-Here's how I think about this logic. If caching is enabled and Valkey is reachable, we check the cache. On a hit, the cached data is returned directly. On a miss, we call the slow source, store the result, and return it. If Valkey is down, we fall back to the data source directly and show a warning. Your application never crashes because of a cache failure.
+The logic: if caching is enabled and Valkey is reachable, check the cache. On a hit, return the cached data. On a miss, call the slow source, store the result, and return it. If Valkey is down, fall back to the data source directly and show a warning.
 
 ### Enabling caching
 
@@ -420,7 +485,7 @@ Now make sure Valkey is running. If you stopped it after Part 3, start it again:
 docker compose -f ../docker-compose.yml up -d
 ```
 
-Confirm it's healthy:
+You can confirm it's healthy with:
 
 ```bash
 docker compose -f ../docker-compose.yml ps
@@ -438,37 +503,37 @@ Flask needs to restart because the cache configuration is read once at startup. 
 
 ### Observing the difference
 
-Search for "valkey." First time, about 2,500 ms. Cache reads MISS. Data wasn't in the cache, so the app called the slow source and stored the result.
+Search for "valkey." First time: about 2,500 ms, Cache: MISS. The data wasn't in the cache, so the app called the slow source and stored the result.
 
-Search for "valkey" again. This time, about 1 ms. Cache reads HIT. It found the data in Valkey and returned it without touching the data source. That's a 2,500x improvement.
+Search for "valkey" again. This time: about 1 ms, Cache: HIT. The app found the data in Valkey and returned it without touching the data source. That's a 2,500x improvement.
 
-Try a different topic. Search "docker." Cache reads MISS again, because that key hasn't been populated yet. Search "docker" a second time and it's instant.
+Try a different topic: "docker." Cache: MISS again, because that key hasn't been populated yet. Search "docker" a second time: instant.
 
 In case something has gone wrong, there are completed files in the `safety/` directory.
 
 ## Part 5: Cache expiration and manual invalidation
 
-A cache that never updates serves stale data forever. That's not a theoretical concern. It's the thing that makes caching interesting and occasionally infuriating. Two mechanisms keep things fresh: automatic expiration (TTL) and manual invalidation.
+A cache that never updates serves stale data forever. Two mechanisms keep things fresh: automatic expiration (TTL) and manual invalidation.
 
 ### How TTL works
 
-TTL stands for "time-to-live." It's the number of seconds a cached entry remains valid before Valkey automatically deletes it. I like to think of it as an expiration date on the data.
+TTL stands for "time-to-live." It's the number of seconds a cached entry remains valid before Valkey automatically deletes it. Think of it as an expiration date on the data.
 
-Every time our cache layer stores an entry, it sets a TTL. In your application, that's thirty seconds (configurable via `CACHE_TTL_SECONDS`). Valkey tracks the countdown internally, and the key is deleted when it reaches zero. No application code needed.
+Every time the cache layer stores an entry, it sets a TTL. In your application, that's thirty seconds (configurable via `CACHE_TTL_SECONDS`). Valkey tracks the countdown internally and deletes the key when it reaches zero. No application code needed.
 
-The [Valkey EXPIRE command documentation](https://valkey.io/commands/expire/) explains the mechanics. Valkey stores the absolute Unix timestamp at which the key expires, then periodically removes expired keys.
+The [Valkey EXPIRE command documentation](https://valkey.io/commands/expire/) explains the mechanics: Valkey stores the absolute Unix timestamp at which the key expires, then periodically removes expired keys.
 
-TTL is a tradeoff. Short TTL means fresher data but fewer cache hits. Long TTL means more hits but staler data. We chose thirty seconds because it's enough to observe both behaviors without waiting forever.
+TTL is a tradeoff. Short TTL means fresher data but fewer cache hits. Long TTL means more hits but staler data. Thirty seconds is enough to observe both behaviors without waiting forever.
 
 ### Seeing expiration in action
 
-1. Search for "valkey." Cache: MISS. Your thirty-second countdown starts.
+1. Search for "valkey." Cache: MISS. The thirty-second countdown starts.
 2. Search again immediately. Cache: HIT. Under 1 ms.
-3. Wait thirty seconds. Search again. Cache: MISS. It expired.
+3. Wait thirty seconds. Search again. Cache: MISS. The entry expired.
 
 ### Manual invalidation
 
-Sometimes you need to remove an entry before its TTL expires. We'll add an `/invalidate` endpoint to handle this. Add it to `app.py`:
+Sometimes you need to remove an entry before its TTL expires. The `/invalidate` endpoint handles this. Add it to `app.py`:
 
 ```python
 @app.route("/invalidate", methods=["POST"])
@@ -491,33 +556,33 @@ def invalidate():
     return redirect(url_for("home"))
 ```
 
-This route uses `methods=["POST"]` instead of the default GET. HTTP defines different "methods" (also called "verbs") for different kinds of actions. GET requests retrieve data without changing anything on the server; they're what your browser sends when you type a URL or submit the lookup form. POST requests tell the server to perform an action that changes state. Invalidating a cache entry is a state change (we're deleting data), so POST is the correct method. Using POST also prevents accidental invalidation from someone bookmarking or refreshing the URL.
+This route uses `methods=["POST"]` instead of the default GET. HTTP defines different "methods" (also called "verbs") for different kinds of actions. GET requests retrieve data without changing anything on the server; they're what your browser sends when you type a URL or submit the lookup form. POST requests tell the server to perform an action that changes state. Invalidating a cache entry is a state change (you're deleting data), so POST is the correct method. Using POST also prevents accidental invalidation from someone bookmarking or refreshing the URL.
 
-Under the hood, our `invalidate` method calls Valkey's [DEL command](https://valkey.io/commands/del/), which removes the key immediately.
+The `invalidate` method calls Valkey's [DEL command](https://valkey.io/commands/del/), which removes the key immediately.
 
 ### Testing invalidation
 
 1. Search for "valkey." Cache: MISS (entry stored).
 2. Search again. Cache: HIT (entry exists).
-3. Invalidate it using `curl`. Here, `-X POST` tells curl to send a POST request instead of the default GET, and `-d` sends the form data:
+3. Invalidate it using `curl`. The `-X POST` flag tells curl to send a POST request instead of the default GET, and the `-d` flag sends the form data:
 
 ```bash
 curl -X POST http://localhost:5000/invalidate -d "topic=valkey"
 ```
 
-4. Search again. Cache: MISS. It's gone.
+4. Search again. Cache: MISS. The entry is gone.
 
 ### Invalidation in the real world
 
-In production, nobody hits an `/invalidate` endpoint by hand. Invalidation is triggered by data changes. Common patterns include write-through invalidation (delete the cache entry when you update the source) and event-driven invalidation (a message queue notifies the cache layer when data changes). Same principle as what we practiced here. The [200-level workshop](../../200-database-caching/) goes deep on write-through invalidation with a real database.
+In production, invalidation is triggered by data changes, not manual HTTP calls. Common patterns: write-through invalidation (delete the cache entry when you update the source) and event-driven invalidation (a message queue notifies the cache layer when data changes). The principle is the same as what you practiced here.
 
 In case something has gone wrong, there are completed files in the `safety/` directory.
 
 ## Wrapping up
 
-We started with a web application that took over two seconds to respond. We added a cache layer and dropped that to under one millisecond. Along the way, we built cache-aside, configured TTL expiration, and implemented manual invalidation.
+You started with a web application that took over two seconds to respond to every request. You added a Valkey cache layer and dropped that to under one millisecond for repeat lookups. Along the way, you built the cache-aside pattern, configured TTL expiration, and implemented manual invalidation.
 
-Same patterns used in production. Same mechanics whether you're serving ten requests or ten million. The only thing that changes at scale is how much you think about invalidation.
+These are the same patterns used in production systems at scale. The mechanics are identical whether you're serving ten requests or ten million.
 
 ## Going further
 
