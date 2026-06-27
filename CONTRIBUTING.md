@@ -1,10 +1,10 @@
 # Contributing
 
-Contributions are welcome, particularly new language implementations and improvements to existing workshop content.
+We welcome contributions, particularly new language implementations and improvements to existing workshop content.
 
 ## Adding a new language implementation
 
-Each workshop level can have multiple language implementations. The core concepts (cache-aside, TTL, invalidation) are language-agnostic; only the implementation differs.
+Each workshop level can have multiple language implementations. Cache-aside, TTL, and invalidation are language-agnostic concepts; only the implementation differs.
 
 A new language implementation should:
 
@@ -15,7 +15,7 @@ A new language implementation should:
 5. Include a language-specific `requirements.txt`, `package.json`, `go.mod`, or equivalent dependency file
 6. Include a `.env.example` with the same environment variables
 
-The shared `docker-compose.yml` at the level directory handles the Valkey (and PostgreSQL, for 200+) containers. Language implementations should not duplicate this.
+A shared `docker-compose.yml` at the level directory handles Valkey (and PostgreSQL, for 200+) containers. Language implementations should not duplicate this.
 
 ## Adding a new workshop level
 
@@ -34,11 +34,11 @@ NNN-descriptive-name/
         └── completed reference files
 ```
 
-Each level should assume completion of the previous level. The README should cover concepts once, then direct participants into their chosen language directory for implementation.
+Each level should assume completion of the previous level. We cover concepts once in the README, then direct participants into their chosen language directory for implementation.
 
 ## Improving existing content
 
-If you find errors, unclear instructions, or missing troubleshooting entries, open an issue or submit a fix directly. Keep in mind that the audience is developers who may be new to caching but are not new to programming.
+If you find errors, unclear instructions, or missing troubleshooting entries, open an issue or submit a fix directly. Keep in mind that our audience is developers who may be new to caching but are not new to programming.
 
 ## Style guidelines
 

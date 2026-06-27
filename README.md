@@ -20,11 +20,11 @@ To complete these workshops, you need:
 - A text editor
 - A terminal
 
-No prior experience with Valkey or caching is required. The 100-level workshop starts from scratch.
+No prior experience with Valkey or caching is required. We start from scratch in the 100-level workshop.
 
 ## How the workshops are organized
 
-Each workshop lives in its own directory (e.g., `100-caching-intro/`). Inside, you will find:
+Each workshop lives in its own directory (e.g., `100-caching-intro/`). Inside, you'll find:
 
 - A `README.md` with the full walkthrough (concepts, architecture, step-by-step implementation)
 - A `docker-compose.yml` for the infrastructure (Valkey, and PostgreSQL for 200+)
@@ -32,7 +32,7 @@ Each workshop lives in its own directory (e.g., `100-caching-intro/`). Inside, y
 - A `TROUBLESHOOTING.md` for common issues
 - Language-specific subdirectories (e.g., `python/`) containing the starter code
 
-The starter code ships with TODO placeholders. The workshop README tells you what to paste in at each step. Completed reference files live in a `safety/` subdirectory if you get stuck.
+Starter code ships with TODO placeholders. Each workshop README tells you what to paste in at each step. Completed reference files live in a `safety/` subdirectory if you get stuck.
 
 ## Getting started
 
@@ -40,7 +40,7 @@ Start with the [100-level workshop](100-caching-intro/). Clone this repository, 
 
 ## Contributing
 
-Contributions are welcome, particularly new language implementations. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions, particularly new language implementations. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Roadmap
 

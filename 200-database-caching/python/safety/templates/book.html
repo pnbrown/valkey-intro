@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ book.title }} - Valkey Caching Workshop</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; color: #333; }
+        a { color: #2563eb; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .timing-info { margin: 20px 0; padding: 12px 16px; background: #f3f4f6; border-radius: 6px; display: flex; gap: 24px; }
+        .timing-info span { font-weight: 500; }
+        .book-meta { color: #6b7280; margin-bottom: 16px; }
+        .description { line-height: 1.6; }
+        .author-bio { margin-top: 24px; padding: 16px; background: #f9fafb; border-radius: 6px; }
+        .author-bio h3 { margin-top: 0; }
+        .actions { margin-top: 24px; }
+        .actions a { padding: 8px 16px; background: #2563eb; color: white; border-radius: 4px; }
+        .actions a:hover { background: #1d4ed8; text-decoration: none; }
+        .back-link { display: inline-block; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <a href="/genre/{{ book.genre }}" class="back-link">&larr; {{ book.genre | capitalize }}</a>
+
+    <h1>{{ book.title }}</h1>
+
+    <div class="timing-info">
+        <span>Query time: {{ elapsed_ms }} ms</span>
+        <span>Cache: {{ cache_status }}</span>
+    </div>
+
+    <div class="book-meta">{{ book.genre | capitalize }} &middot; {{ book.published_year }}</div>
+
+    <div class="description">
+        <p>{{ book.description }}</p>
+    </div>
+
+    <div class="author-bio">
+        <h3>About {{ book.author_name }}</h3>
+        <p>{{ book.author_bio }}</p>
+    </div>
+
+    <div class="actions">
+        <a href="/book/{{ book.id }}/edit">Edit description</a>
+    </div>
+</body>
+</html>
