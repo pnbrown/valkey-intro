@@ -8,10 +8,10 @@ Each workshop level can have multiple language implementations. Cache-aside, TTL
 
 A new language implementation should:
 
-1. Live in its own directory within the relevant level (e.g., `100-caching-intro/node/`, `200-database-caching/go/`)
-2. Include starter files with TODO placeholders that guide the participant
+1. Live in its own directory within the relevant level (e.g., `caching/100-caching-intro/node/`, `caching/200-database-caching/go/`)
+2. Include starter files with minimal placeholders that point to the matching step in the walkthrough, so the walkthrough is the single source of truth for implementation code
 3. Include a `safety/` subdirectory with completed reference files
-4. Follow the same five-part progression as the existing Python implementation
+4. Follow the same progression as the existing Python implementation for that level
 5. Include a language-specific `requirements.txt`, `package.json`, `go.mod`, or equivalent dependency file
 6. Include a `.env.example` with the same environment variables
 
@@ -19,22 +19,43 @@ A shared `docker-compose.yml` at the level directory handles Valkey (and Postgre
 
 ## Adding a new workshop level
 
-New levels should follow the existing directory structure:
+New levels live inside their track directory and follow the existing structure:
 
 ```
-NNN-descriptive-name/
-├── docker-compose.yml     (shared infrastructure)
-├── README.md              (concepts, architecture, walkthrough)
-├── FAQ.md                 (design decisions, deeper explanations)
-├── TROUBLESHOOTING.md     (common issues and fixes)
-└── python/                (or node/, go/, etc.)
-    ├── starter files with TODOs
-    ├── .env.example
-    └── safety/
-        └── completed reference files
+caching/
+└── NNN-descriptive-name/
+    ├── docker-compose.yml     (shared infrastructure)
+    ├── README.md              (short overview and language implementation table)
+    └── python/                (or node/, go/, etc.)
+        ├── README.md          (concepts, architecture, walkthrough)
+        ├── FAQ.md             (design decisions, deeper explanations)
+        ├── TROUBLESHOOTING.md (common issues and fixes)
+        ├── .env.example
+        ├── starter files with placeholders
+        └── safety/
+            └── completed reference files
 ```
 
-Each level should assume completion of the previous level. We cover concepts once in the README, then direct participants into their chosen language directory for implementation.
+Each level should assume completion of the previous level. The level README gives a short overview and lists the available language implementations. The full walkthrough lives in each language directory.
+
+## Branches and pull requests
+
+Each track lives in its own top-level directory (for example, `caching/`). Name every branch after the scope it changes, followed by a short description:
+
+- `<track>/<description>` for changes inside one track's directory, such as `caching/fix-venv-instructions`
+- `repo/<description>` for root files (`README.md`, `FUTURE.md`, `CONTRIBUTING.md`, `LICENSE`) and for any change that spans more than one track
+
+Keep each branch to one change and inside its scope. A branch named `caching/...` changes only files under `caching/`. If a fix needs to touch more than one track, use a `repo/` branch.
+
+Branches are short-lived:
+
+1. Start each branch from the latest `main`.
+2. Open a pull request when the change is ready.
+3. Merge it. GitHub deletes the branch automatically after the merge.
+
+Short-lived, single-scope branches keep pull requests small and prevent the merge conflicts that long-running branches accumulate.
+
+Before opening a pull request that moves or renames files, confirm that every relative link still resolves and that every command a learner types (such as `cd caching/100-caching-intro`) still matches the directory layout.
 
 ## Improving existing content
 
