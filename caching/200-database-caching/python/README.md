@@ -575,7 +575,7 @@ These patterns scale directly. Our bookstore is small, but the architecture is t
 
 ## Going further
 
-The 300-level workshop (when available) builds on this with multiple TTL strategies, cache warming, and stampede prevention.
+Continue with the [300-level workshop](../../300-protecting-cache/), which puts the same bookstore under real traffic with cache warming, stampede prevention, and a circuit breaker.
 
 For reference:
 

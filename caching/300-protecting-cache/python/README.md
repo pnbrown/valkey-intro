@@ -454,7 +454,7 @@ docker compose up -d
 
 Open http://localhost:8080 in your browser. In the Valkey Admin UI, add a connection to `valkey` on port `6379` (the service name from your Docker Compose network). You will see the same metrics you calculated by hand (hit rate, memory, connected clients) rendered as time-series charts, plus key-level inspection and slow log visibility.
 
-This section is not required to complete the workshop. The 400-level workshop covers observability in greater depth. For more on Valkey Admin's capabilities, see the [Introducing Valkey Admin 1.0](https://valkey.io/blog/introducing-valkey-admin-1-0-visual-cluster-management-for-valkey/) blog post.
+This section is not required to complete the workshop. The 400-level workshop adds a health check endpoint and shows how to inspect a cluster from the command line. For more on Valkey Admin's capabilities, see the [Introducing Valkey Admin 1.0](https://valkey.io/blog/introducing-valkey-admin-1-0-visual-cluster-management-for-valkey/) blog post.
 
 ## Part 5: Putting it all together
 
@@ -483,7 +483,7 @@ The script uses `concurrent.futures` to send parallel requests and reports resul
 
 ## Going further
 
-The 400-level workshop (when available) builds on this with Valkey Cluster (distributed caching across multiple nodes), read replicas, eviction policies under memory pressure, and production alerting.
+Continue with the [400-level workshop](../../400-production-operations/), which runs the same bookstore on a six-node Valkey Cluster with connection pooling, health checks, eviction under memory pressure, and automatic failover.
 
 For reference:
 
