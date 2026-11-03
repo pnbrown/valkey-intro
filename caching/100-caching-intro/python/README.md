@@ -596,8 +596,8 @@ For deeper coverage of Valkey's capabilities, including data structures, persist
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines on adding language implementations or improving workshop content.
+See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for guidelines on adding language implementations or improving workshop content.
 
 ## License
 
-[WTFPL](../../LICENSE)
+[WTFPL](../../../LICENSE)

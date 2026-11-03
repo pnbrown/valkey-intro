@@ -22,7 +22,7 @@ Start the infrastructure, install dependencies, and seed the database. These ste
 **1. Start Valkey and PostgreSQL:**
 
 ```bash
-cd 300-protecting-cache
+cd caching/300-protecting-cache
 docker compose up -d
 ```
 
@@ -496,8 +496,8 @@ For reference:
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines on adding language implementations or improving workshop content.
+See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for guidelines on adding language implementations or improving workshop content.
 
 ## License
 
-[WTFPL](../../LICENSE)
+[WTFPL](../../../LICENSE)

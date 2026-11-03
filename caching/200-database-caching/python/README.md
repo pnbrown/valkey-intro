@@ -585,8 +585,8 @@ For reference:
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines on adding language implementations or improving workshop content.
+See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for guidelines on adding language implementations or improving workshop content.
 
 ## License
 
-[WTFPL](../../LICENSE)
+[WTFPL](../../../LICENSE)

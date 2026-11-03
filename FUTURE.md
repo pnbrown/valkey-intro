@@ -14,7 +14,7 @@ Replace the simulated delay with a real PostgreSQL database. You'll cache real q
 
 ### 300-Level: Protecting the Caching Layer with Valkey
 
-Here the application grows to serve different data types (user profiles, product listings, session data) with different TTL strategies per type. We cover cache warming, handling cache stampedes (thundering herd), and request coalescing to prevent multiple simultaneous fetches for the same key.
+The same bookstore, now facing real traffic. We cover cache warming with Valkey pipelines to eliminate cold starts, mutex locking to prevent cache stampedes (thundering herd), a circuit breaker so a failing Valkey stops adding latency to every request, and measuring cache effectiveness with INFO stats.
 
 ### 400-Level: Production Operations with Valkey Cluster
 

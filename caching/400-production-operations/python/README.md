@@ -38,7 +38,7 @@ Start the infrastructure, install dependencies, and seed the database.
 **1. Start the Valkey Cluster and PostgreSQL:**
 
 ```bash
-cd 400-production-operations
+cd caching/400-production-operations
 docker compose up -d
 ```
 
@@ -387,8 +387,8 @@ If something is not working, check [TROUBLESHOOTING.md](TROUBLESHOOTING.md). For
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines on adding language implementations or improving workshop content.
+See [CONTRIBUTING.md](../../../CONTRIBUTING.md) for guidelines on adding language implementations or improving workshop content.
 
 ## License
 
-[WTFPL](../../LICENSE)
+[WTFPL](../../../LICENSE)
