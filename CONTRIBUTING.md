@@ -38,6 +38,25 @@ caching/
 
 Each level should assume completion of the previous level. The level README gives a short overview and lists the available language implementations. The full walkthrough lives in each language directory.
 
+## Branches and pull requests
+
+Each track lives in its own top-level directory (for example, `caching/`). Name every branch after the scope it changes, followed by a short description:
+
+- `<track>/<description>` for changes inside one track's directory, such as `caching/fix-venv-instructions`
+- `repo/<description>` for root files (`README.md`, `FUTURE.md`, `CONTRIBUTING.md`, `LICENSE`) and for any change that spans more than one track
+
+Keep each branch to one change and inside its scope. A branch named `caching/...` changes only files under `caching/`. If a fix needs to touch more than one track, use a `repo/` branch.
+
+Branches are short-lived:
+
+1. Start each branch from the latest `main`.
+2. Open a pull request when the change is ready.
+3. Merge it. GitHub deletes the branch automatically after the merge.
+
+Short-lived, single-scope branches keep pull requests small and prevent the merge conflicts that long-running branches accumulate.
+
+Before opening a pull request that moves or renames files, confirm that every relative link still resolves and that every command a learner types (such as `cd caching/100-caching-intro`) still matches the directory layout.
+
 ## Improving existing content
 
 If you find errors, unclear instructions, or missing troubleshooting entries, open an issue or submit a fix directly. Keep in mind that our audience is developers who may be new to caching but are not new to programming.

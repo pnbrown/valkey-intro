@@ -1,8 +1,10 @@
 # Workshop Series Roadmap
 
-We built this repository as a progressive series of Valkey caching workshops. Each level builds on the previous one and assumes you completed the earlier workshops.
+This repository is organized into tracks. Each track lives in its own top-level directory and runs from a 100-level introduction to a 400-level production workshop. Within a track, each level builds on the previous one and assumes you completed the earlier workshops.
 
-## Completed
+## Caching track (complete)
+
+All four levels live in [`caching/`](caching/).
 
 ### 100-Level: Introduction to Caching with Valkey
 
@@ -18,4 +20,4 @@ The same bookstore, now facing real traffic. We cover cache warming with Valkey 
 
 ### 400-Level: Production Operations with Valkey Cluster
 
-Distributed caching with Valkey Cluster, read replicas, eviction policies under memory pressure, and observability (monitoring hit rates, tracking cache efficiency, alerting on degradation). We focus on the operational concerns that emerge at production scale.
+The capstone of the caching track. We harden the application with connection pooling, a cluster-aware Valkey client, health checks, and serialization for types that `json.dumps` rejects. Then we run the bookstore on a six-node Valkey Cluster and work through hash slots, eviction policies under memory pressure, and automatic failover when a primary goes down.
