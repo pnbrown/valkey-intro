@@ -2,7 +2,7 @@
 
 In the 300-level workshop you built resilience into a single-node setup: cache warming, stampede prevention, circuit breakers, and observability. All of that assumed one Valkey instance. Production systems rarely run a single instance. They run clusters: data sharded across multiple nodes, replicas for failover, memory limits enforced with eviction policies. The application code changes too. Connections become pooled resources. Serialization needs to handle types that `json.dumps` rejects. Health checks need to probe real dependencies, not just return 200.
 
-This workshop splits into three sections. Part A hardens the application layer (your code). Part B introduces Valkey Cluster (your infrastructure). Part C ties them together with a full lifecycle walkthrough and load test. All three use the same bookstore from the [200](../200-database-caching/) and [300-level](../300-multi-key-strategies/).
+This workshop splits into three sections. Part A hardens the application layer (your code). Part B introduces Valkey Cluster (your infrastructure). Part C ties them together with a full lifecycle walkthrough and load test. All three use the same bookstore from the [200](../../200-database-caching/) and [300-level](../../300-protecting-cache/).
 
 By the end you will have:
 
@@ -15,7 +15,7 @@ By the end you will have:
 
 A note on scope: this workshop gives you hands-on experience with the operational concerns that appear at production scale. It does not cover every production topic (security hardening, capacity planning, backup strategies, incident response). What it does give you is vocabulary, working code, and enough understanding to know what to look up next.
 
-We are assuming you completed the [300-level workshop](../300-multi-key-strategies/). Cache warming, stampede prevention, and circuit breakers should be familiar. If they are not, go back.
+We are assuming you completed the [300-level workshop](../../300-protecting-cache/). Cache warming, stampede prevention, and circuit breakers should be familiar. If they are not, go back.
 
 You will need Python 3.9 or later, Docker, a text editor, a terminal, and git. The Docker Compose setup for this workshop runs 9 containers (6 Valkey cluster nodes, a cluster initializer, PostgreSQL, and optionally Valkey Admin), which requires more resources than earlier workshops. Ensure Docker Desktop has at least 4 GB of memory allocated.
 
@@ -62,6 +62,8 @@ Look for `cluster_state:ok` and `cluster_slots_assigned:16384`.
 
 ```bash
 cd python
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 

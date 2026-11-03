@@ -10,4 +10,4 @@ The capstone of the caching track. This workshop takes the patterns from levels 
 
 ## Prerequisites
 
-Completion of the [300-level workshop](../300-multi-key-strategies/).
+Completion of the [300-level workshop](../300-protecting-cache/).
