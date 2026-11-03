@@ -4,7 +4,7 @@
 
 **Symptom:** Connection refused errors when starting the app or running `valkey-cli`.
 
-**Fix:** Ensure Docker Compose is running from the `300-multi-key-strategies` directory:
+**Fix:** Ensure Docker Compose is running from the `300-protecting-cache` directory:
 ```bash
 docker compose up -d
 docker compose ps

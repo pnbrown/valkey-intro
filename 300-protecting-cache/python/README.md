@@ -11,7 +11,7 @@ This workshop teaches you to handle the failure modes that emerge under concurre
 5. Used `INFO stats` to measure cache hit rate and understand what the numbers mean
 6. Optionally explored Valkey Admin for visual observability
 
-We're assuming you completed the [200-level workshop](../200-database-caching/). Cache-aside, write-through invalidation, and pattern-based invalidation should be familiar. If they aren't, go back.
+We're assuming you completed the [200-level workshop](../../200-database-caching/). Cache-aside, write-through invalidation, and pattern-based invalidation should be familiar. If they aren't, go back.
 
 You'll need Python 3.9 or later, Docker, a text editor, a terminal, and git.
 
@@ -22,7 +22,7 @@ Start the infrastructure, install dependencies, and seed the database. These ste
 **1. Start Valkey and PostgreSQL:**
 
 ```bash
-cd 300-multi-key-strategies
+cd 300-protecting-cache
 docker compose up -d
 ```
 
@@ -158,7 +158,7 @@ Now start the app:
 python app.py
 ```
 
-Before loading any page in the browser, open a second terminal (in the `300-multi-key-strategies` directory) and check for keys:
+Before loading any page in the browser, open a second terminal (in the `300-protecting-cache` directory) and check for keys:
 
 ```bash
 docker compose exec valkey valkey-cli KEYS "*"
@@ -272,7 +272,7 @@ First, flush the cache and restart the app so you start with a cold cache (no wa
 docker compose exec valkey valkey-cli FLUSHALL
 ```
 
-Start `valkey-cli MONITOR` in a second terminal (from the `300-multi-key-strategies` directory):
+Start `valkey-cli MONITOR` in a second terminal (from the `300-protecting-cache` directory):
 
 ```bash
 docker compose exec valkey valkey-cli MONITOR
@@ -345,7 +345,7 @@ The `get()` and `set()` methods already call `_circuit_is_open()` at the top and
 ### Observing it
 
 1. Load pages with Valkey running. Circuit closed, cache HIT/MISS as normal.
-2. Stop Valkey (from the `300-multi-key-strategies` directory): `docker compose stop valkey`
+2. Stop Valkey (from the `300-protecting-cache` directory): `docker compose stop valkey`
 3. Load a page. First 3 requests log warnings and trigger the circuit to open.
 4. Subsequent requests skip the cache with zero added latency. A single log line: "Circuit breaker opened after 3 failures"
 5. Start Valkey: `docker compose start valkey` (from the same directory)
