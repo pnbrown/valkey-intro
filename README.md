@@ -1,8 +1,17 @@
-# Valkey Caching Workshops
+# Valkey Workshops
 
-A progressive series of hands-on workshops that teach caching patterns using [Valkey](https://valkey.io/), an open source in-memory datastore. Each workshop builds on the previous one, introducing new concepts and increasing complexity.
+Hands-on workshops that teach you to build with [Valkey](https://valkey.io/), an open source in-memory datastore. The workshops are organized into tracks. Each track focuses on one way applications use Valkey and runs from a 100-level introduction to a 400-level production workshop, with each level building on the one before it.
 
-## Workshops
+## Tracks
+
+| Track | Status | What you'll learn |
+|-------|--------|-------------------|
+| [Caching](caching/) | Complete | Speeding up an application by storing the results of expensive work |
+| [Session storage](FUTURE.md#session-storage-track-planned) | Planned | Keeping track of who a user is and what they're doing across requests |
+
+The tracks are independent, but we recommend starting with the caching track. It introduces the Valkey fundamentals the other tracks build on.
+
+## Caching track
 
 | Level | Title | What you'll learn |
 |-------|-------|-------------------|
@@ -20,11 +29,11 @@ To complete these workshops, you need:
 - A text editor
 - A terminal
 
-No prior experience with Valkey or caching is required. We start from scratch in the 100-level workshop.
+No prior experience with Valkey is required. The 100-level workshop of the caching track starts from scratch.
 
 ## How the workshops are organized
 
-The workshops live in the `caching/` directory, one directory per level (e.g., `caching/100-caching-intro/`). Each level contains:
+Each track lives in its own top-level directory (e.g., `caching/`), with one directory per level inside it (e.g., `caching/100-caching-intro/`). Each level contains:
 
 - A `README.md` with a short overview and a table of available language implementations
 - A `docker-compose.yml` for the infrastructure (Valkey, and PostgreSQL for 200+)
@@ -40,7 +49,7 @@ Each language directory contains:
 
 ## Getting started
 
-Start with the [100-level workshop](caching/100-caching-intro/). Clone this repository, open `caching/100-caching-intro/python/README.md`, and follow the walkthrough.
+Start with the [caching track's 100-level workshop](caching/100-caching-intro/). Clone this repository, open `caching/100-caching-intro/python/README.md`, and follow the walkthrough.
 
 ## Contributing
 
@@ -48,7 +57,7 @@ We welcome contributions, particularly new language implementations. See [CONTRI
 
 ## Roadmap
 
-See [FUTURE.md](FUTURE.md) for planned workshops and their scope.
+See [FUTURE.md](FUTURE.md) for planned tracks and their scope.
 
 ## License
 
