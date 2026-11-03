@@ -223,7 +223,7 @@ This endpoint returns 200 when all probed dependencies respond, 503 otherwise. C
 
 The 300-level used `json.dumps()` directly. This works for dictionaries with strings, ints, and lists. It breaks on `datetime` objects, `Decimal` values, and other types that PostgreSQL returns depending on your schema.
 
-Valkey also supports JSON as a native data type through the [JSON module](https://valkey.io/topics/json/) (available in Valkey 8.1+). With the JSON module, you can store, retrieve, and query JSON documents natively without serializing them to strings yourself. We are not using it in this workshop because we are building on the string-based caching pattern from the earlier levels, and the JSON module requires enabling it explicitly in your Valkey configuration. It is worth knowing it exists: for new projects where you control the Valkey deployment, native JSON eliminates the serialization step entirely.
+Valkey also supports JSON as a native data type through the [JSON module](https://valkey.io/topics/valkey-json/) (compatible with Valkey 8.0 and above). With the JSON module, you can store, retrieve, and query JSON documents natively without serializing them to strings yourself. We are not using it in this workshop because we are building on the string-based caching pattern from the earlier levels, and the JSON module requires enabling it explicitly in your Valkey configuration. It is worth knowing it exists: for new projects where you control the Valkey deployment, native JSON eliminates the serialization step entirely.
 
 For this workshop, we stay with `json.dumps()` and handle the edge cases with a custom encoder.
 
