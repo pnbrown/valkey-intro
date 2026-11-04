@@ -33,5 +33,5 @@ def get_all_genres():
 
 
 def update_book_description(book_id, new_description):
-    """Update a book's description. Returns True if updated. See Part 4 in the README."""
+    """Update a book's description. Returns True if updated. See Part 2 in the README."""
     return False

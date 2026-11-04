@@ -13,10 +13,19 @@
         button { padding: 8px 16px; font-size: 1rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 12px; }
         button:hover { background: #1d4ed8; }
         .back-link { display: inline-block; margin-bottom: 16px; }
+        .flash-message { background: #fee2e2; border: 1px solid #ef4444; color: #991b1b; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
     </style>
 </head>
 <body>
     <a href="/book/{{ book.id }}" class="back-link">&larr; Back to {{ book.title }}</a>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="flash-message" role="alert">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
     <h1>Edit: {{ book.title }}</h1>
 

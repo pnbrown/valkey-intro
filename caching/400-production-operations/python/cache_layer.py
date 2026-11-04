@@ -71,7 +71,7 @@ class CacheLayer:
                 return (None, False)
             self._record_success()
             return (json.loads(raw), True)
-        except (valkey.ConnectionError, valkey.TimeoutError) as exc:
+        except (valkey.ConnectionError, valkey.TimeoutError, valkey.ResponseError) as exc:
             logger.warning("Valkey connection error on get('%s'): %s", key, exc)
             self._record_failure()
             return (None, False)
@@ -87,7 +87,7 @@ class CacheLayer:
         try:
             self._client.set(key, json.dumps(data), ex=self._ttl_seconds)
             self._record_success()
-        except (valkey.ConnectionError, valkey.TimeoutError) as exc:
+        except (valkey.ConnectionError, valkey.TimeoutError, valkey.ResponseError) as exc:
             logger.warning("Valkey connection error on set('%s'): %s", key, exc)
             self._record_failure()
         except (TypeError) as exc:
@@ -101,7 +101,7 @@ class CacheLayer:
             result = self._client.delete(key) > 0
             self._record_success()
             return result
-        except (valkey.ConnectionError, valkey.TimeoutError) as exc:
+        except (valkey.ConnectionError, valkey.TimeoutError, valkey.ResponseError) as exc:
             logger.warning("Valkey connection error on invalidate('%s'): %s", key, exc)
             self._record_failure()
             return False
@@ -117,13 +117,68 @@ class CacheLayer:
                 count += 1
             self._record_success()
             return count
-        except (valkey.ConnectionError, valkey.TimeoutError) as exc:
+        except (valkey.ConnectionError, valkey.TimeoutError, valkey.ResponseError) as exc:
             logger.warning("Valkey connection error on invalidate_pattern('%s'): %s", pattern, exc)
             self._record_failure()
             return 0
 
+    def get_with_lock(self, key, lock_ttl=5, wait_time=0.1, max_retries=3):
+        """
+        Retrieve a cached entry with stampede prevention (carried forward from
+        the 300-level). Returns (data, is_hit, is_rebuilder).
+
+        In a cluster, the lock key (lock:genre:...) and the data key
+        (genre:...) usually hash to different slots. That is fine: every
+        command below names a single key, so each one routes to its own node.
+        """
+        if self._circuit_is_open():
+            return (None, False, False)
+
+        try:
+            # Check cache first
+            raw = self._client.get(key)
+            if raw is not None:
+                self._record_success()
+                return (json.loads(raw), True, False)
+
+            # Cache miss. Try to acquire the lock.
+            lock_key = f"lock:{key}"
+            acquired = self._client.set(lock_key, "1", nx=True, ex=lock_ttl)
+
+            if acquired:
+                self._record_success()
+                return (None, False, True)
+
+            # Lock not acquired. Another request is rebuilding. Wait and retry.
+            for _ in range(max_retries):
+                _time.sleep(wait_time)
+                raw = self._client.get(key)
+                if raw is not None:
+                    self._record_success()
+                    return (json.loads(raw), True, False)
+
+            # Retries exhausted. Fall through to database.
+            self._record_success()
+            return (None, False, False)
+
+        except (valkey.ConnectionError, valkey.TimeoutError, valkey.ResponseError) as exc:
+            logger.warning("Valkey connection error on get_with_lock('%s'): %s", key, exc)
+            self._record_failure()
+            return (None, False, False)
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.warning("Deserialization error on get_with_lock('%s'): %s", key, exc)
+            return (None, False, False)
+
+    def release_lock(self, key):
+        """Delete the lock key after rebuilding. Best-effort, ignore errors."""
+        try:
+            self._client.delete(f"lock:{key}")
+        except (valkey.ConnectionError, valkey.TimeoutError, valkey.ResponseError):
+            pass
+
     def get_stats(self):
-        """Retrieve cache statistics. See Part 4 of the 300-level for implementation."""
+        """Retrieve cache statistics (carried from the 300-level). In cluster mode
+        this reports a single node; Part B5 replaces it with a cluster-wide version."""
         if self._circuit_is_open():
             return None
         try:
@@ -144,10 +199,16 @@ class CacheLayer:
                 "connected_clients": clients.get("connected_clients", 0),
                 "total_keys": total_keys,
             }
-        except (valkey.ConnectionError, valkey.TimeoutError) as exc:
+        except (valkey.ConnectionError, valkey.TimeoutError, valkey.ResponseError) as exc:
             logger.warning("Valkey connection error on get_stats(): %s", exc)
             self._record_failure()
             return None
+
+    def pipeline(self):
+        """Return a pipeline for batching commands (used by warm_cache).
+        With ValkeyCluster this is a cluster pipeline: it splits the queued
+        commands by node and sends each node the commands for its keys."""
+        return self._client.pipeline()
 
     @property
     def ttl_seconds(self):

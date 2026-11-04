@@ -15,6 +15,7 @@
         .book-item:last-child { border-bottom: none; }
         .book-title { font-weight: 600; font-size: 1.1rem; }
         .book-meta { color: #6b7280; margin-top: 4px; }
+        .book-description { margin-top: 6px; line-height: 1.5; }
         .back-link { display: inline-block; margin-bottom: 16px; }
     </style>
 </head>
@@ -31,6 +32,7 @@
         <li class="book-item">
             <div class="book-title"><a href="/book/{{ book.id }}">{{ book.title }}</a></div>
             <div class="book-meta">{{ book.author_name }} &middot; {{ book.published_year }}</div>
+            <div class="book-description">{{ book.description }}</div>
         </li>
         {% endfor %}
     </ul>

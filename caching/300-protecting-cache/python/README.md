@@ -1,6 +1,6 @@
 # Protecting the Cache Layer with Valkey
 
-In the 200-level workshop you cached database queries and invalidated them on write. The pattern worked because your traffic was you, alone, clicking links in a browser. Production traffic is not one person clicking links. It is hundreds, maybe thousands, of concurrent requests hitting the same endpoint at the same moment a cache key expires. When that happens, every request simultaneously discovers the cache is empty and races to rebuild it from the database. The database gets slammed with duplicate work. That is called a cache stampede.
+In the 200-level workshop you cached database queries and invalidated them on write. The pattern worked because your traffic was you, alone, clicking links in a browser. Production traffic is not one person clicking links. It is hundreds or thousands of concurrent requests hitting the same endpoint at the same moment a cache key expires. When that happens, every request simultaneously discovers the cache is empty and races to rebuild it from the database. The database gets slammed with duplicate work. That is called a cache stampede.
 
 This workshop teaches you to handle the failure modes that emerge under concurrency: stampedes, cold starts, and the operational blind spots that come from not measuring your cache's effectiveness. By the end you'll have:
 
@@ -13,7 +13,7 @@ This workshop teaches you to handle the failure modes that emerge under concurre
 
 We're assuming you completed the [200-level workshop](../../200-database-caching/). Cache-aside, write-through invalidation, and pattern-based invalidation should be familiar. If they aren't, go back.
 
-You'll need Python 3.9 or later, Docker, a text editor, a terminal, and git.
+You'll need Python 3.9 or later, Docker, a text editor, a terminal, and git. On Linux or Windows, read the [platform notes](../../../README.md#platform-notes) first.
 
 ## Setup
 
@@ -67,15 +67,19 @@ Open http://localhost:5000 in your browser. Click a genre. Note the cache status
 
 Stop the app (`Ctrl+C`) before continuing to Part 1.
 
+## If you get stuck
+
+Completed versions of every file you edit are in the `safety/` directory. [TROUBLESHOOTING.md](TROUBLESHOOTING.md) covers the errors readers hit most often, and [FAQ.md](FAQ.md) explains the design decisions behind each part.
+
 ## The application
 
-Same bookstore from the 200-level. Same PostgreSQL database, same Valkey instance, same Flask routes. What changes is how the cache layer behaves under stress and what happens at startup. We're adding resilience and observability, not new features.
+Same bookstore from the 200-level. Same PostgreSQL database, same Valkey instance, same Flask routes, plus a `/stats` route you will build in Part 4. What changes is how the cache layer behaves under stress and what happens at startup. We're adding resilience and observability, not new features.
 
 ## Part 1: Cache warming with pipelines
 
 ### The cold start problem
 
-You just saw it. The app started, the cache was empty, and your first page load hit the database. When it was just you clicking a link, that miss took a few milliseconds and nobody noticed. Now imagine a production deployment: the container restarts and 200 users hit the homepage in the same second. Every one of them gets a miss. Every one of them queries PostgreSQL for the same genre list. That's a stampede caused by a cold cache rather than an expired key.
+You just saw it. The app started, the cache was empty, and your first page load hit the database. When it was just you clicking a link, that miss took a dozen or so milliseconds and nobody noticed. Now imagine a production deployment: the container restarts and 200 users hit the homepage in the same second. Every one of them gets a miss. Every one of them queries PostgreSQL for the same genre list. That's a stampede caused by a cold cache rather than an expired key.
 
 Cache warming solves this by pre-populating known high-traffic keys before any user request arrives.
 
@@ -95,7 +99,7 @@ Writing 10 cache keys means 10 network round-trips to Valkey. A pipeline batches
 
 ### Implementation
 
-Open `warm_cache.py`. Replace the entire body of `warm_cache()` (everything below the docstring, including the `logger.info` placeholder) with the following:
+Open `warm_cache.py`. Replace the whole `warm_cache()` function, including its `def` line, docstring, and the `logger.info` placeholder, with the following:
 
 ```python
 def warm_cache(cache):
@@ -164,7 +168,13 @@ Before loading any page in the browser, open a second terminal (in the `300-prot
 docker compose exec valkey valkey-cli KEYS "*"
 ```
 
-Keys are already there. You haven't loaded a single page, but the warming function you just wrote ran at startup and populated them. Now open http://localhost:5000 and click a genre. The first page load shows **Cache: HIT**. Compare this to the setup step where the same action was a MISS because no warming existed.
+Keys are already there: `genres` plus one `genre:` key for each of the nine genres. You haven't loaded a single page, but the warming function you just wrote ran at startup and populated them. The terminal running Flask shows the same thing:
+
+```
+INFO:warm_cache: Cache warmed: 10 keys in 111 ms
+```
+
+The time varies from run to run. You will see the line twice, once before and once after ` * Restarting with stat`. Debug mode's reloader runs `app.py` in a watcher process and again in the process that serves requests, so warming runs in both. The second run writes the same ten keys, which does no harm. Now open http://localhost:5000 and click a genre. The first page load shows **Cache: HIT**. Compare this to the setup step where the same action was a MISS because no warming existed.
 
 ## Part 2: Preventing cache stampedes with mutex locking
 
@@ -179,15 +189,15 @@ The pattern:
 1. Request checks the cache. Miss.
 2. Request attempts to acquire a lock: `SET lock:genre:{name} 1 NX EX 5` (set only if not exists, expires in 5 seconds as a safety net)
 3. If lock acquired: query the database, write to cache, delete the lock.
-4. If lock not acquired: another request is already rebuilding. Wait briefly (sleep, then retry the cache). If the cache is populated on retry, serve it. If the lock expired without the cache being populated (the rebuilder crashed), fall through to the database.
+4. If lock not acquired: another request is already rebuilding. Wait briefly (sleep, then retry the cache). If the cache is populated on retry, serve it. If the cache is still empty after the retries (three 100 ms waits, so about 300 ms in total), fall through to the database.
 
 ### Why this works for Flask
 
-Flask handles requests synchronously (one thread per request in the default threaded mode). A short sleep (50-100ms) while waiting for another thread to rebuild is acceptable. The database is protected from duplicate queries, and the user experiences a small delay rather than a timeout.
+Flask handles requests synchronously (one thread per request in the default threaded mode). A short sleep (100 ms per retry in this code) while waiting for another thread to rebuild is acceptable. The database is protected from duplicate queries, and the user experiences a small delay rather than a timeout.
 
 ### Implementation
 
-Open `cache_layer.py` and find the `get_with_lock()` method. Replace the entire method body (everything below `def get_with_lock`) with the following. This is copy-pasteable as a complete method:
+Open `cache_layer.py` and find the `get_with_lock()` method. Replace the entire method, including its `def` line, docstring, and placeholder body, with the following:
 
 ```python
     def get_with_lock(self, key, lock_ttl=5, wait_time=0.1, max_retries=3):
@@ -235,15 +245,15 @@ Open `cache_layer.py` and find the `get_with_lock()` method. Replace the entire 
             return (None, False, False)
 ```
 
-Notice that this method talks to `self._client` directly rather than calling `self.get()`. That is intentional. The lock acquisition and the cache check need to happen in a tight sequence without the overhead of re-checking the circuit breaker or re-wrapping JSON on every retry. The circuit check happens once at the top.
+Notice that this method talks to `self._client` directly rather than calling `self.get()`. That is intentional. The cache check, the lock attempt, and the retries run as one sequence with a single circuit check at the top. Calling `self.get()` on each retry would repeat that check and record a separate success every time.
 
 The three possible return values tell the caller what to do:
 
 - `(data, True, False)`: cache hit, serve `data` immediately.
-- `(None, False, True)`: you acquired the lock, you are the rebuilder. Query the DB, call `cache.set()`, then call `cache.release_lock()`.
+- `(None, False, True)`: you acquired the lock, you are the rebuilder. Query the DB, call `cache.set()`, then call `cache.release_lock()` in a `finally` block so the lock is released even if the query fails.
 - `(None, False, False)`: retries exhausted or error. Fall through to the database without locking.
 
-Now open `app.py` and find the `genre_listing` route. Replace the cache block (the section between `if CACHE_ENABLED and cache is not None:` and `else:`) with the following. Note the 8-space indentation; it sits inside the route function's `if` block:
+Now open `app.py` and find the `genre_listing` route. Replace everything inside the `if CACHE_ENABLED and cache is not None:` block, from the `# Part 2: Replace this with cache.get_with_lock()` comment down to the `cache_status = "MISS"` line just above the outer `else:`, with the following. Keep the `if CACHE_ENABLED ...` line and the outer `else:` (the one aligned with it) exactly as they are. Note the 8-space indentation; the new block sits inside that `if`:
 
 ```python
         data, is_hit, is_rebuilder = cache.get_with_lock(cache_key)
@@ -252,9 +262,13 @@ Now open `app.py` and find the `genre_listing` route. Replace the cache block (t
             books = data
             cache_status = "HIT"
         elif is_rebuilder:
-            books = get_books_by_genre(genre)
-            cache.set(cache_key, books)
-            cache.release_lock(cache_key)
+            # Release the lock even if the query fails, so the next request can
+            # rebuild right away instead of waiting out the lock's 5-second TTL.
+            try:
+                books = get_books_by_genre(genre)
+                cache.set(cache_key, books)
+            finally:
+                cache.release_lock(cache_key)
             cache_status = "MISS"
         else:
             # Retries exhausted or error. Fall through to DB.
@@ -264,9 +278,11 @@ Now open `app.py` and find the `genre_listing` route. Replace the cache block (t
 
 The route now handles all three cases. Only the rebuilder queries the database and writes back to the cache. Everyone else either gets the cached value or, in the worst case, falls through to a direct database query without holding a lock.
 
+The lock has two layers of cleanup. The `finally` block releases it as soon as the rebuild ends, whether the query succeeded or raised an error, so the next request can rebuild immediately. The 5-second `EX` on the lock covers the cases `finally` cannot, such as the process being killed mid-rebuild. Without `finally`, a failed query would leave the lock in place for the full 5 seconds, and every request for that genre would wait out its retries and then query the database without caching the result.
+
 ### Observing it
 
-First, flush the cache and restart the app so you start with a cold cache (no warming, to isolate the stampede behavior):
+Make sure the app is running. Warming runs every time the app starts, so if you restart it, do that first. Then flush the cache so the genre is cold, from the `300-protecting-cache` directory:
 
 ```bash
 docker compose exec valkey valkey-cli FLUSHALL
@@ -286,17 +302,18 @@ for i in $(seq 1 10); do curl -s http://localhost:5000/genre/fantasy > /dev/null
 
 In the MONITOR output, you should see:
 
-- Only one `SET genre:fantasy ...` command (the rebuilder wrote to cache)
-- A `SET lock:genre:fantasy ...` with NX and EX flags (the lock acquisition)
-- A `DEL lock:genre:fantasy` (the lock release after rebuild)
+- Ten `SET "lock:genre:fantasy" "1" "EX" "5" "NX"` commands, one per request. Every request that misses tries to take the lock; `NX` means only the first one succeeds.
+- Exactly one `SET "genre:fantasy" ...`: the request that won the lock rebuilt the listing and wrote it back.
+- One `DEL "lock:genre:fantasy"`: the lock release after the rebuild.
+- About twenty `GET "genre:fantasy"` commands: each request's first check, plus each waiting request's retry. In a test run there were 19, ten first checks and nine retries, which means every waiting request found the fresh value on its first retry and none of them had to query the database.
 
-Without the mutex, you would see 10 separate SET commands for the same key. With it, only one request queried the database.
+Without the mutex, you would see ten `SET "genre:fantasy"` commands, one from every request that queried the database. With it, one request did the work and the other nine read its result.
 
 ## Part 3: Circuit breaker for Valkey failures
 
 ### Why the 200-level approach isn't enough
 
-In the 200-level, when Valkey goes down, every request still attempts a cache operation, waits for the connection timeout, logs a warning, and falls through to the database. That timeout (typically 1-3 seconds by default) adds latency to every single request during an outage. For a brief blip, it's fine. For a sustained outage, you're adding seconds of latency to every page load for no benefit.
+In the 200-level, when Valkey goes down, every request still attempts a cache operation, logs a warning, and falls through to the database. How much that costs depends on how Valkey fails. When its container is simply stopped, as in this workshop, the connection is refused immediately, so each failed attempt is cheap. When the host stops answering altogether (a network partition or a crashed machine), each attempt waits for a timeout instead. This `CacheLayer` sets no `socket_timeout`, so that wait is the operating system's TCP connect timeout, far longer than a normal page load. For a brief blip, either is fine. For a sustained outage, you're paying that cost on every request for no benefit, and filling your logs with the same warning.
 
 ### The circuit breaker pattern
 
@@ -304,11 +321,11 @@ Three states:
 
 - **Closed** (normal operation): cache operations proceed as usual.
 - **Open** (Valkey is down): skip all cache operations immediately. No connection attempt, no timeout penalty. Return miss instantly.
-- **Half-open** (probing): after a cooldown period, allow a single request through to test if Valkey is back. If it succeeds, close the circuit. If it fails, reopen and reset the timer.
+- **Half-open** (probing): after a cooldown period, let requests reach Valkey again to test whether it is back. The first success closes the circuit. The first failure reopens it and restarts the timer.
 
 ### Implementation
 
-Open `cache_layer.py` and find the three circuit breaker methods (`_circuit_is_open`, `_record_failure`, `_record_success`). Replace each method body with the following. These are copy-pasteable as complete methods:
+Open `cache_layer.py` and find the three circuit breaker methods (`_circuit_is_open`, `_record_failure`, `_record_success`). Replace each of the three methods, including its `def` line and docstring, with the versions below:
 
 ```python
     def _circuit_is_open(self):
@@ -317,7 +334,7 @@ Open `cache_layer.py` and find the three circuit breaker methods (`_circuit_is_o
             return False
         elapsed = _time.time() - self._circuit_opened_at
         if elapsed >= self._circuit_cooldown:
-            # Half-open: allow one probe
+            # Half-open: let requests through again to test Valkey
             return False
         return True
 
@@ -338,7 +355,9 @@ Open `cache_layer.py` and find the three circuit breaker methods (`_circuit_is_o
         self._circuit_opened_at = None
 ```
 
-The logic is simple. `_circuit_is_open()` returns `True` only when the circuit has been tripped and the cooldown has not yet elapsed. Once the cooldown passes, it returns `False` (the half-open state), which allows exactly one request through as a probe. If that probe succeeds, `_record_success()` resets everything and the circuit closes. If it fails, `_record_failure()` re-opens the circuit with a fresh timestamp.
+The logic is simple. `_circuit_is_open()` returns `True` only when the circuit has been tripped and the cooldown has not yet elapsed. Once the cooldown passes, it returns `False` (the half-open state), and cache operations reach Valkey again. The first success calls `_record_success()`, which resets everything and closes the circuit. The first failure calls `_record_failure()`, and because the failure count is still at the threshold, that single failure re-opens the circuit with a fresh timestamp.
+
+This is a simplified half-open state: every request that arrives after the cooldown goes through, not just one. Production circuit breakers usually let a single trial request through and keep the circuit open for everyone else until that request returns, so a crowd of waiting requests cannot all hit a service that is still down. With one reader and a local container, the difference does not show, and the simpler code is easier to follow.
 
 The `get()` and `set()` methods already call `_circuit_is_open()` at the top and `_record_success()`/`_record_failure()` on every outcome. You do not need to change them. Pasting in the three methods above is all that is needed to activate the circuit breaker.
 
@@ -346,10 +365,10 @@ The `get()` and `set()` methods already call `_circuit_is_open()` at the top and
 
 1. Load pages with Valkey running. Circuit closed, cache HIT/MISS as normal.
 2. Stop Valkey (from the `300-protecting-cache` directory): `docker compose stop valkey`
-3. Load a page. First 3 requests log warnings and trigger the circuit to open.
+3. Load a few pages. Each failed cache operation logs a warning, and the third failure opens the circuit. A home page makes two cache calls (a `get` and a `set`), so the home page followed by one genre page is enough.
 4. Subsequent requests skip the cache with zero added latency. A single log line: "Circuit breaker opened after 3 failures"
 5. Start Valkey: `docker compose start valkey` (from the same directory)
-6. After cooldown expires (30 seconds by default), one request probes. Cache recovers. Circuit closes.
+6. After the cooldown (30 seconds by default), cache operations reach Valkey again. The first one that succeeds closes the circuit, and the log shows "Circuit breaker closed, Valkey recovered."
 
 ## Part 4: Measuring cache effectiveness
 
@@ -357,25 +376,25 @@ The `get()` and `set()` methods already call `_circuit_is_open()` at the top and
 
 A cache you aren't measuring is a cache you're trusting on faith. The two numbers you need:
 
-- **Hit rate**: hits / (hits + misses). Below 80% usually means TTLs are too short, keys are poorly designed, or the working set doesn't fit in memory.
+- **Hit rate**: hits / (hits + misses). A falling or low hit rate points to TTLs that are too short, keys that are poorly designed, or a working set that doesn't fit in memory. What counts as low depends on your workload, so track the trend rather than a fixed number.
 - **Memory usage**: how much of your available memory is consumed. Approaching the limit means eviction is coming.
 
 ### Using INFO stats
 
-Valkey's `INFO` command exposes server-wide statistics. The relevant fields:
+Valkey's `INFO` command exposes server-wide statistics, grouped into sections. The relevant fields, with the section each one lives in:
 
 ```
-keyspace_hits:      (number of successful key lookups)
-keyspace_misses:    (number of failed key lookups)
-used_memory_human:  (current memory consumption)
-connected_clients:  (active connections)
+keyspace_hits:      stats section   (number of successful key lookups)
+keyspace_misses:    stats section   (number of failed key lookups)
+used_memory_human:  memory section  (current memory consumption)
+connected_clients:  clients section (active connections)
 ```
 
 Hit rate = `keyspace_hits / (keyspace_hits + keyspace_misses)`
 
 ### Implementation
 
-Open `cache_layer.py` and find the `get_stats()` method. Replace the entire method body with:
+Open `cache_layer.py` and find the `get_stats()` method. Replace the entire method, including its `def` line and docstring, with:
 
 ```python
     def get_stats(self):
@@ -431,7 +450,7 @@ After implementing both, restart the app and visit http://localhost:5000/stats. 
 
 ### Structured logging
 
-The structured logging section is left as an exercise. The idea: replace the generic `logger.warning()` calls with structured log lines that include the cache key, operation (get/set/invalidate), result (hit/miss/error), latency, and circuit state. This produces a machine-parseable log stream suitable for any log aggregation tool. The safety/ directory contains an example if you want to see one approach.
+The structured logging section is left as an exercise. The idea: replace the generic `logger.warning()` calls with structured log lines that include the cache key, operation (get/set/invalidate), result (hit/miss/error), latency, and circuit state. This produces a machine-parseable log stream suitable for any log aggregation tool.
 
 ### Optional: Valkey Admin
 
@@ -441,9 +460,9 @@ To run it alongside your workshop infrastructure, add the following service to y
 
 ```yaml
   valkey-admin:
-    image: valkey/valkey-admin:latest
+    image: valkey/valkey-admin:1.3.0
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
 ```
 
 Then restart your services:
@@ -461,10 +480,10 @@ This section is not required to complete the workshop. The 400-level workshop co
 ### The full lifecycle
 
 1. App starts. Cache warming populates known hot keys via pipeline.
-2. First users arrive. All hits. No cold start.
+2. First users arrive. The home page and every genre page are hits. Book pages are not warmed, so each one misses once and is a hit after that.
 3. TTL expires on a popular key. Multiple requests arrive simultaneously. Mutex lock ensures only one rebuilds. Others wait briefly and get the fresh value.
 4. Valkey goes down. Circuit breaker opens after 3 failures. All subsequent requests skip the cache with zero latency penalty. App continues serving from PostgreSQL.
-5. Valkey comes back. Circuit probes, succeeds, closes. Cache operations resume. Next miss triggers a rebuild, and the cycle continues.
+5. Valkey comes back. After the cooldown, the next cache operation succeeds and the circuit closes. Cache operations resume. Next miss triggers a rebuild, and the cycle continues.
 
 ### Load testing
 
@@ -474,16 +493,17 @@ Run the provided concurrent load test (from the `python/` directory):
 python load_test.py
 ```
 
-The script uses `concurrent.futures` to send parallel requests and reports results. Verify that:
+The script sends three rounds of 20 concurrent requests across the nine genre pages and reports how many succeeded and how long they took. With Valkey running, every request should succeed. Then check the hit rate:
 
-- Warming eliminates cold start misses
-- Mutex prevents duplicate database queries under concurrency
-- Circuit breaker eliminates timeout latency during outage
-- Hit rate stays above 90% under sustained load with Valkey healthy
+```bash
+curl http://localhost:5000/stats
+```
+
+Now see the circuit breaker in the numbers. Stop Valkey (from the `300-protecting-cache` directory, `docker compose stop valkey`) and run the load test again. Every request still succeeds, because each page falls back to PostgreSQL, and the terminal running Flask shows `Circuit breaker opened after 3 failures`. Average latency rises (in a test run, from 41 ms to 113 ms) because every page now queries the database. Start Valkey again with `docker compose start valkey` when you are done; after the 30-second cooldown, the circuit closes on the next successful cache call.
 
 ## Going further
 
-The 400-level workshop (when available) builds on this with Valkey Cluster (distributed caching across multiple nodes), read replicas, eviction policies under memory pressure, and production alerting.
+The [400-level workshop](../../400-production-operations/) builds on this with Valkey Cluster (distributed caching across multiple nodes), connection pooling, health checks, eviction under memory pressure, automatic failover, and spotting hot shards.
 
 For reference:
 

@@ -67,9 +67,13 @@ def genre_listing(genre):
             books = data
             cache_status = "HIT"
         elif is_rebuilder:
-            books = get_books_by_genre(genre)
-            cache.set(cache_key, books)
-            cache.release_lock(cache_key)
+            # Release the lock even if the query fails, so the next request can
+            # rebuild right away instead of waiting out the lock's 5-second TTL.
+            try:
+                books = get_books_by_genre(genre)
+                cache.set(cache_key, books)
+            finally:
+                cache.release_lock(cache_key)
             cache_status = "MISS"
         else:
             # Retries exhausted or error. Fall through to DB.

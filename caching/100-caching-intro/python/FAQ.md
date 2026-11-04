@@ -10,7 +10,7 @@ This document covers common questions about the design decisions in this worksho
 
 Valkey is a standalone server process, not a library you import into Python. Someone following this workshop needs a running Valkey instance to connect to, and Docker is the lowest-friction way to provide one across all platforms.
 
-Running Valkey in a container means no platform-specific installation steps, no compiling from source, and no worrying about conflicting versions. A single `docker compose up -d` gives you a working server on macOS, Linux, or Windows with WSL. When you're done, `docker compose down` removes everything cleanly. No leftover processes, no stale data between sessions.
+Running Valkey in a container means no platform-specific installation steps, no compiling from source, and no worrying about conflicting versions. A single `docker compose -f ../docker-compose.yml up -d`, run from the `python/` directory, gives you a working server on macOS, Linux, or Windows with WSL. When you're done, `docker compose -f ../docker-compose.yml down` removes everything cleanly. No leftover processes, no stale data between sessions.
 
 This also mirrors how Valkey is deployed in production. Your application and your cache server are separate processes, often on separate machines. The container makes that architectural separation visible from the start.
 
@@ -36,17 +36,17 @@ The workshop displays a yellow warning banner when Valkey is unreachable so you 
 
 ### Why is `CACHE_ENABLED` a separate flag instead of just checking whether Valkey is reachable?
 
-Separating the "should we try to cache" decision from the "can we reach Valkey" check gives you explicit control. You might want to disable caching during debugging without stopping the Valkey container. You might want to run the application in a test environment where no Valkey server exists. The flag makes the behavior predictable: if `CACHE_ENABLED=false`, the application never attempts a Valkey connection, regardless of whether one is available.
+Separating the "should we try to cache" decision from the "can we reach Valkey" check gives you explicit control. You can turn caching off while debugging without stopping the Valkey container, or run the application in a test environment where no Valkey server exists. The flag makes the behavior predictable: if `CACHE_ENABLED=false`, the application never attempts a Valkey connection, regardless of whether one is available.
 
 ### Why does the workshop use `time.sleep()` instead of a real external API?
 
-A real API introduces variables outside your control: network latency, rate limits, authentication, downtime. Any of these could derail the workshop for reasons unrelated to caching. The simulated delay gives you a consistent, reproducible 2.5-second wait that you can observe, measure, and compare against cached responses.
+A real API introduces variables outside your control: network latency, rate limits, authentication, downtime. Each of them is a way for the workshop to fail for reasons unrelated to caching. The simulated delay gives you a consistent, reproducible 2.5-second wait that you can observe, measure, and compare against cached responses.
 
 The delay is configurable via the `SLOW_DELAY_SECONDS` environment variable in your `.env` file. If you want faster iterations during development, set it to `1` or `0.5`.
 
 ### Why JSON for serialization instead of something more efficient?
 
-The cache layer serializes data as JSON strings before storing them in Valkey. JSON is human-readable, which makes debugging straightforward: you can connect to Valkey with `valkey-cli` and run `GET facts:valkey` to see exactly what is stored. Binary formats like pickle or msgpack would be smaller and faster to serialize, but they obscure the data and add concepts that distract from the caching lesson itself.
+The cache layer serializes data as JSON strings before storing them in Valkey. JSON is human-readable, which makes debugging straightforward: you can run `docker compose -f ../docker-compose.yml exec valkey valkey-cli GET facts:valkey` to see exactly what is stored. Binary formats like pickle or msgpack store the same data in a form you cannot read in `valkey-cli`, and they add concepts that distract from the caching lesson itself.
 
 In production, the choice depends on your data size and performance requirements. For most web application caching use cases, JSON is sufficient.
 
@@ -54,7 +54,7 @@ In production, the choice depends on your data size and performance requirements
 
 The key format `facts:{topic}` uses a prefix to namespace the entries. If your application later caches other types of data (user sessions, configuration, rate-limit counters), each type gets its own prefix. This prevents key collisions and makes it easy to identify what a key contains when inspecting Valkey directly.
 
-This is a common Valkey convention. The [Valkey data types documentation](https://valkey.io/topics/data-types/) recommends using colons as separators in key names.
+The [Valkey keyspace documentation](https://valkey.io/topics/keyspace/) recommends sticking with a schema such as "object-type:id" (its example is `user:1000`), which is the shape `facts:valkey` follows.
 
 ---
 
@@ -66,7 +66,7 @@ TTL stands for "time-to-live." When you store a key in Valkey with a TTL, Valkey
 
 This workshop uses a thirty-second TTL. That value is short enough that you can observe expiration during the workshop without waiting too long, but long enough to demonstrate multiple cache hits before the entry disappears.
 
-In production, TTL values depend on how often the underlying data changes and how much staleness your application can tolerate. A product catalog that updates once a day might use a TTL of several hours. A stock price feed might use a TTL of a few seconds. There is no universal correct value.
+In production, TTL values depend on how often the underlying data changes and how much staleness your application can tolerate. A product catalog that updates once a day can tolerate a TTL of several hours. A stock price feed needs a TTL of a few seconds. There is no universal correct value.
 
 For the mechanics of how Valkey implements expiration, see the [EXPIRE command documentation](https://valkey.io/commands/expire/) and the [TTL command documentation](https://valkey.io/commands/ttl/).
 
@@ -78,7 +78,7 @@ HTTP defines several "methods" (also called "verbs") that indicate what kind of 
 
 **POST** tells the server to perform an action that changes state. Creating a record, submitting a payment, or deleting a cache entry are all state changes. The `/invalidate` route uses POST because it removes data from Valkey. Using POST prevents accidental invalidation from someone bookmarking the URL or a browser pre-fetching the link.
 
-The `curl` command in Part 5 uses `-X POST` to specify the POST method and `-d "topic=valkey"` to send form data in the request body (the same way an HTML form with `method="post"` would).
+The `curl` command in Part 5 uses `-X POST` to specify the POST method and `-d "topic=valkey"` to send form data in the request body (the same way an HTML form with `method="post"` would). In Windows PowerShell, type `curl.exe` instead of `curl`; see the [platform notes](../../../README.md#platform-notes).
 
 For a complete reference, see [MDN's HTTP request methods documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods).
 
@@ -94,11 +94,11 @@ Both serve the same purpose (preventing stale data) but are triggered differentl
 
 Both requests will see a cache miss, both will call the slow data source, and both will write the result to the cache. The second write overwrites the first with identical data, so no harm is done. This is called a "thundering herd" or "cache stampede" in the case where many requests arrive simultaneously for the same uncached key.
 
-For this workshop, this is not a problem because the data source is deterministic (same input always produces the same output). In production systems with high traffic, you might use techniques like request coalescing or locking to prevent redundant work. These are beyond the scope of a 100-level introduction.
+For this workshop, this is not a problem because the data source is deterministic (same input always produces the same output). High-traffic production systems prevent the redundant work with techniques like request coalescing or locking. These are beyond the scope of a 100-level introduction; the [300-level workshop](../../300-protecting-cache/) builds a lock-based version.
 
 ### What is `decode_responses=True` in the Valkey client?
 
-By default, the valkey-py client returns bytes from Valkey (e.g., `b'{"topic": "valkey"}'`). Setting `decode_responses=True` tells the client to decode those bytes to Python strings automatically. This saves you from calling `.decode("utf-8")` on every response and makes the JSON deserialization (`json.loads()`) work without extra conversion steps.
+By default, the valkey-py client returns bytes from Valkey (e.g., `b'{"topic": "valkey"}'`). Setting `decode_responses=True` tells the client to decode those bytes to Python strings automatically. This saves you from calling `.decode("utf-8")` on every response. `json.loads()` accepts bytes as well as strings, so the cache layer's `get` works either way; the setting matters for everything else you read back, such as the replies you print while experimenting, which are easier to read as strings.
 
 ### What data types does Valkey support beyond strings?
 
@@ -108,7 +108,7 @@ The [Valkey data types documentation](https://valkey.io/topics/data-types/) prov
 
 ### Does Valkey persist data to disk?
 
-Valkey can be configured for persistence using snapshots (RDB) or append-only files (AOF), but this workshop runs it without persistence. When you stop the container with `docker compose down`, all data is lost. For a cache, this is acceptable because the data can always be regenerated from the original source.
+Yes, by default. Valkey supports two kinds of persistence, point-in-time snapshots (RDB) and an append-only file (AOF). The workshop runs the Valkey image with its default settings, which turn on snapshots: Valkey saves its data to a file inside the container when it shuts down (and periodically while it runs), then loads that file when it starts again. So `docker compose stop` followed by `docker compose start` brings your cached keys back, minus any whose TTL ran out. `docker compose down` removes the container and the file with it, so the next `up` starts with an empty cache. For a cache, losing the data is acceptable because it can always be regenerated from the original source.
 
 In production, whether you enable persistence depends on your use case. A pure cache does not need persistence. A session store or a primary datastore would.
 
@@ -120,7 +120,7 @@ The [Valkey persistence documentation](https://valkey.io/topics/persistence/) co
 
 ### Why use a virtual environment?
 
-A virtual environment creates an isolated Python installation for this project. Packages you install with `pip` go into the `.venv/` directory instead of your system Python. This prevents version conflicts between projects and, on newer versions of macOS and Ubuntu, is required because the system Python refuses to install packages globally without one.
+A virtual environment creates an isolated Python installation for this project. Packages you install with `pip` go into the `.venv/` directory instead of your system Python. This prevents version conflicts between projects. Some operating systems also mark their system Python as "externally managed" under [PEP 668](https://peps.python.org/pep-0668/), and there `pip install` refuses to install packages outside a virtual environment.
 
 The [Python venv documentation](https://docs.python.org/3/library/venv.html) covers the details.
 
@@ -140,7 +140,7 @@ The [Flask documentation](https://flask.palletsprojects.com/) is the official re
 
 ### Can I use a different Python version?
 
-The workshop requires Python 3.9 or later. This minimum is set by Flask 3.x, which dropped support for earlier Python versions. If you have a newer version (3.10, 3.11, 3.12, 3.13), it will work without changes.
+The workshop requires Python 3.9 or later. This minimum is set by Flask 3.1 (the workshop pins `Flask==3.1.1`), which requires Python 3.9 or later according to its [PyPI page](https://pypi.org/project/Flask/3.1.1/). If you have a newer version (3.10, 3.11, 3.12, 3.13), it will work without changes.
 
 To check your version:
 
@@ -148,7 +148,7 @@ To check your version:
 python --version
 ```
 
-If your system `python` command points to Python 2, try `python3 --version` and use `python3` throughout the workshop instead.
+If your system has no `python` command, or it points to Python 2, run `python3 --version` and create the virtual environment with `python3 -m venv .venv`. Once the virtual environment is active, `python` points to its Python 3 interpreter, so the rest of the workshop's commands work as written. The [platform notes](../../../README.md#platform-notes) cover the Debian and Ubuntu `python3-venv` package and the Windows equivalents.
 
 ---
 
@@ -170,19 +170,19 @@ Managed Valkey services handle replication, failover, and scaling so you do not 
 
 Connection pooling reuses a set of open connections to Valkey rather than creating a new connection for every request. The valkey-py client uses a connection pool by default. The `Valkey()` constructor in `cache_layer.py` creates a pool automatically; you do not need to configure it manually for this workshop.
 
-In high-traffic production applications, you may need to tune pool size. The [valkey-py documentation](https://valkey-py.readthedocs.io/en/latest/) covers connection pool configuration.
+High-traffic production applications tune the pool size to match how many requests run at once. The [valkey-py documentation](https://valkey-py.readthedocs.io/en/latest/) covers connection pool configuration.
 
 ### What happens if Valkey runs out of memory?
 
-If Valkey reaches its configured memory limit, it can be set to evict older keys to make room for new ones. The eviction policy determines which keys get removed (least recently used, random, keys with TTLs first, and others). This workshop does not configure a memory limit because the dataset is tiny, but production deployments should always set one.
+If Valkey reaches its configured memory limit, it can be set to evict older keys to make room for new ones. The eviction policy determines which keys get removed (least recently used, least frequently used, random, only keys that have a TTL, and others), or whether Valkey refuses writes that need more memory instead. This workshop does not configure a memory limit because the dataset is tiny, but production deployments should always set one.
 
 The [Valkey eviction documentation](https://valkey.io/topics/lru-cache/) explains the available policies.
 
-### Is valkey-py the same thing as redis-py?
+### Which Python client does the workshop use?
 
-The valkey-py library is a fork of redis-py, created specifically for Valkey. The API is nearly identical. If you have used redis-py before, valkey-py will feel familiar. The main differences are the import name (`import valkey` instead of `import redis`) and that valkey-py tracks Valkey-specific features and releases.
+The workshop uses [valkey-py](https://github.com/valkey-io/valkey-py), the Python client published under the Valkey project's `valkey-io` organization on GitHub, which describes itself as the Python interface to the Valkey key-value store. You install it with `pip install valkey` (the workshop's `requirements.txt` pins `valkey==6.1.0`) and import it with `import valkey`. Each `valkey.Valkey(...)` client manages its own connection pool, so the cache layer creates one client and reuses it for every request.
 
-The [valkey-py documentation](https://valkey-py.readthedocs.io/en/latest/) has migration notes for anyone coming from redis-py.
+The [valkey-py documentation](https://valkey-py.readthedocs.io/en/latest/) covers the full API, including pipelines (used in the 300-level workshop) and cluster connections (used in the 400-level workshop).
 
 ---
 

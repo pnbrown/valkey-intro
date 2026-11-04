@@ -7,7 +7,7 @@ By the end of this workshop you'll have achieved three outcomes:
 2. You'll be able to add a Valkey caching layer to a web application and observe the performance difference
 3. You'll understand cache expiration and manual invalidation
 
-To complete this workshop, you'll need Python 3.9 or later, Docker running on your machine, a text editor, and a terminal. The implementation files live in the `python/` subdirectory. All commands in this guide should be run from within that directory unless noted otherwise.
+To complete this workshop, you'll need Python 3.9 or later, Docker running on your machine, a text editor, and a terminal. On Linux or Windows, read the [platform notes](../../../README.md#platform-notes) first. The implementation files live in the `python/` subdirectory. All commands in this guide should be run from within that directory unless noted otherwise.
 
 ## Part 1: What is caching and why should you care?
 
@@ -44,21 +44,31 @@ The cache layer sits between your route handler and your data source. When the h
 
 **Time-to-live (TTL)** is how long a cached entry remains valid before the system removes it automatically. Set a key with a thirty-second TTL, and Valkey deletes it after thirty seconds. The [Valkey TTL command documentation](https://valkey.io/commands/ttl/) covers the mechanics.
 
-**Cache invalidation** is removing entries before their TTL expires because you know the underlying data has changed. Phil Karlton's often-quoted observation that this is one of the two hard problems in computer science speaks to how tricky it gets in practice.
+**Cache invalidation** is removing entries before their TTL expires because you know the underlying data has changed. Phil Karlton's often-quoted observation that this is one of the two hard problems in computer science ([Martin Fowler, TwoHardThings](https://martinfowler.com/bliki/TwoHardThings.html)) speaks to how tricky it gets in practice.
 
 ### What's Valkey?
 
-[Valkey](https://valkey.io/) is an open source, in-memory datastore that the [Linux Foundation](https://www.linuxfoundation.org/press/linux-foundation-launches-open-source-valkey-community) hosts and the community maintains. It stores data in RAM, which means reads and writes complete in sub-millisecond time. For this workshop, you'll use it as a straightforward key/value cache: store a JSON string under a key, retrieve it later by that same key.
+[Valkey](https://valkey.io/) is an open source, in-memory datastore that the [Linux Foundation](https://www.linuxfoundation.org/press/linux-foundation-launches-open-source-valkey-community) hosts and the community maintains. It keeps data in RAM, so reads and writes skip the disk. In Part 4 you will measure a cache hit yourself: in our tests, the app's timing display showed 0 to 2 ms. For this workshop, you'll use it as a straightforward key/value cache: store a JSON string under a key, retrieve it later by that same key.
 
 ## Part 2: Building the application without a cache
 
 In this part, you complete a Flask web application that fetches data from a deliberately slow source. Every request takes over two seconds. This baseline is the point: you need to feel the problem before the solution makes sense.
 
-The project already contains starter files with TODO placeholders. You will open each file and fill in the missing logic. The code blocks below show what the completed version looks like, so you know exactly what to paste in.
+The project already contains starter files with placeholders that point to the matching step in this guide. You will open each file and fill in the missing logic. The code blocks below show what the completed version looks like, so you know exactly what to paste.
+
+### Getting into the project directory
+
+You will need a text editor to modify the project files. Any editor works: VS Code, Sublime Text, Notepad, TextEdit (in plain text mode), or whichever editor you prefer. If you do not have a preferred editor, [VS Code](https://code.visualstudio.com/) is a free option that works on all platforms.
+
+Open a terminal and, from the root of your clone of this repository, change into the Python implementation directory. All commands for the rest of this workshop run from here, and the file paths below are relative to it:
+
+```bash
+cd caching/100-caching-intro/python
+```
 
 ### The data source
 
-Open `data_source.py` in your text editor. You will see a skeleton with TODO comments marking where code needs to go. Replace the TODOs with the following:
+Open `data_source.py` in your text editor. You will see a skeleton with comments that say "See Part 2 in the README" marking where code needs to go. Replace them with the following:
 
 First, replace the empty `_FACTS_DATABASE = {}` with this populated dictionary:
 
@@ -75,11 +85,11 @@ _FACTS_DATABASE = {
         "Python was created by Guido van Rossum and first released in 1991.",
         "Python uses indentation to define code blocks instead of curly braces.",
         "Python supports multiple programming paradigms including procedural, object-oriented, and functional.",
-        "The Python Package Index (PyPI) hosts over 400,000 packages.",
+        "The Python Package Index (PyPI) hosts hundreds of thousands of packages.",
         "Python is dynamically typed and garbage-collected.",
     ],
     "docker": [
-        "Docker uses OS-level virtualization to deliver software in containers.",
+        "Docker packages applications into containers using operating system-level virtualization.",
         "Docker containers share the host system kernel, making them lighter than virtual machines.",
         "A Dockerfile defines the steps to build a container image.",
         "Docker Hub is a public registry for sharing container images.",
@@ -92,17 +102,10 @@ _FACTS_DATABASE = {
         "A cache miss occurs when requested data is not in the cache and must be fetched from the source.",
         "Time-to-live (TTL) determines how long a cached entry remains valid before expiring.",
     ],
-    "ttl": [
-    "TTL stands for time-to-live and originated in IP networking to prevent packets from circling forever.",
-    "Valkey implements TTL by storing the absolute Unix timestamp at which a key expires.",
-    "A key with a TTL of zero is deleted immediately, which is equivalent to calling DEL.",
-    "Valkey checks for expired keys using both lazy deletion on access and periodic background sampling.",
-    "Setting a new value on an existing key removes its TTL unless you explicitly pass an expiration again.",
-    ],
 }
 ```
 
-Then, replace the TODO comments in the `get_facts` function with this logic:
+Then replace the whole `get_facts` function, from its `def` line down to the closing `}` of its `return` statement, with this version:
 
 ```python
 def get_facts(topic):
@@ -126,7 +129,7 @@ The output is deterministic: same topic in, same facts out. This matters when yo
 
 ### The Flask application
 
-Open `app.py`. The starter has the imports, Flask setup, and the home route already done. You need to fill in the `/lookup` route. Replace the TODO section with:
+Open `app.py`. The starter has the imports, Flask setup, and the home route already done. You need to complete the `/lookup` route. Replace the whole `lookup` function, from `@app.route("/lookup")` down to its last line (`return redirect(url_for("home"))`), with:
 
 ```python
 @app.route("/lookup")
@@ -157,81 +160,11 @@ This is the no-cache version. Every request goes straight to the slow data sourc
 
 ### The HTML template
 
-Open `templates/index.html`. Replace the placeholder content with:
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valkey Caching Workshop</title>
-    <style>
-        body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; color: #333; }
-        form { margin: 20px 0; }
-        label { display: block; margin-bottom: 6px; font-weight: 500; }
-        input[type="text"] { padding: 8px 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; width: 250px; }
-        button { padding: 8px 16px; font-size: 1rem; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #1d4ed8; }
-        .timing-info { margin: 20px 0; padding: 12px 16px; background: #f3f4f6; border-radius: 6px; display: flex; gap: 24px; }
-        .timing-info span { font-weight: 500; }
-        .facts-list { list-style: disc; padding-left: 20px; }
-        .facts-list li { margin-bottom: 8px; line-height: 1.5; }
-        .cache-warning { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; }
-        .flash-message { background: #fee2e2; border: 1px solid #ef4444; color: #991b1b; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
-    </style>
-</head>
-<body>
-    <h1>Valkey Caching Workshop</h1>
-
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for message in messages %}
-                <div class="flash-message" role="alert">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    {% if cache_warning %}
-        <div class="cache-warning" role="alert">{{ cache_warning }}</div>
-    {% endif %}
-
-    <form action="/lookup" method="get">
-        <label for="topic-input">Enter a topic to look up:</label>
-        <input type="text" id="topic-input" name="topic" placeholder="e.g. valkey, python, docker">
-        <button type="submit">Look up</button>
-    </form>
-
-    {% if elapsed_ms is defined %}
-    <div class="timing-info">
-        <span>Response time: {{ elapsed_ms }} ms</span>
-        <span>Cache: {{ cache_status }}</span>
-    </div>
-    {% endif %}
-
-    {% if facts %}
-    <h2>Facts about "{{ topic }}"</h2>
-    <ul class="facts-list">
-        {% for fact in facts %}
-            <li>{{ fact }}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-</body>
-</html>
-```
+Open `templates/index.html`. The starter template is already complete, so there is nothing to change. Skim it to see where the page gets its data. It shows any flashed messages, the yellow `cache_warning` banner, the lookup form, a timing line with the response time (`elapsed_ms`) and the cache status (`cache_status`), and the list of `facts` for the `topic`. Each of those is a value the `/lookup` route passes to `render_template()`.
 
 ### Running it
 
-You will need a text editor to modify the project files. Any editor works: VS Code, Sublime Text, Notepad, TextEdit (in plain text mode), or whatever you are comfortable with. If you do not have a preferred editor, [VS Code](https://code.visualstudio.com/) is a free option that works on all platforms.
-
-Navigate into the Python implementation directory. All commands for the rest of this workshop should be run from here:
-
-```bash
-cd python
-```
-
-Set up a virtual environment. This keeps the workshop's dependencies isolated from the rest of your system (and on newer macOS and Ubuntu, `pip install` won't work without one):
+In the terminal you opened at the start of Part 2 (in the `python/` directory), set up a virtual environment. This keeps the workshop's dependencies isolated from the rest of your system. Some operating systems also mark their system Python as "externally managed" under [PEP 668](https://peps.python.org/pep-0668/), and on those systems `pip install` refuses to install packages outside a virtual environment:
 
 ```bash
 python -m venv .venv
@@ -270,9 +203,9 @@ The workshop includes a `docker-compose.yml` one level up from the `python/` dir
 ```yaml
 services:
   valkey:
-    image: valkey/valkey:8.0
+    image: valkey/valkey:9.1
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
@@ -280,7 +213,7 @@ services:
       retries: 3
 ```
 
-Run it from the `100-caching-intro/` directory (one level up from `python/`):
+Run it from the `python/` directory, where you have been working. The `-f ../docker-compose.yml` flag points Docker Compose at the file one level up:
 
 ```bash
 docker compose -f ../docker-compose.yml up -d
@@ -322,7 +255,7 @@ You've got a slow application and a running Valkey server. Now you connect the t
 
 ### The cache layer module
 
-Open `cache_layer.py`. You will see a class skeleton with TODO placeholders in each method. The docstrings describe what each method should do, step by step. Fill in the method bodies with the following implementations:
+Open `cache_layer.py`. You will see a class skeleton with a placeholder in each method that points to Part 4 of this guide. The docstrings describe what each method should do. Replace each method with the matching block below, including its `def` line and docstring (and, for `is_connected`, the `@property` line above it):
 
 **The `get` method:**
 
@@ -505,7 +438,7 @@ Flask needs to restart because the cache configuration is read once at startup. 
 
 Search for "valkey." First time: about 2,500 ms, Cache: MISS. The data wasn't in the cache, so the app called the slow source and stored the result.
 
-Search for "valkey" again. This time: about 1 ms, Cache: HIT. The app found the data in Valkey and returned it without touching the data source. That's a 2,500x improvement.
+Search for "valkey" again. This time: 0 to 2 ms, Cache: HIT. The app found the data in Valkey and returned it without touching the data source. (The app rounds to whole milliseconds, so a hit that takes a fraction of a millisecond shows as 0.)
 
 Try a different topic: "docker." Cache: MISS again, because that key hasn't been populated yet. Search "docker" a second time: instant.
 
@@ -521,19 +454,19 @@ TTL stands for "time-to-live." It's the number of seconds a cached entry remains
 
 Every time the cache layer stores an entry, it sets a TTL. In your application, that's thirty seconds (configurable via `CACHE_TTL_SECONDS`). Valkey tracks the countdown internally and deletes the key when it reaches zero. No application code needed.
 
-The [Valkey EXPIRE command documentation](https://valkey.io/commands/expire/) explains the mechanics: Valkey stores the absolute Unix timestamp at which the key expires, then periodically removes expired keys.
+The [Valkey EXPIRE command documentation](https://valkey.io/commands/expire/) explains the mechanics: Valkey records each key's expiry time in milliseconds and reclaims expired keys in two ways, when a client tries to access one and in a background cycle that scans for them.
 
 TTL is a tradeoff. Short TTL means fresher data but fewer cache hits. Long TTL means more hits but staler data. Thirty seconds is enough to observe both behaviors without waiting forever.
 
 ### Seeing expiration in action
 
 1. Search for "valkey." Cache: MISS. The thirty-second countdown starts.
-2. Search again immediately. Cache: HIT. Under 1 ms.
+2. Search again immediately. Cache: HIT. 0 to 2 ms.
 3. Wait thirty seconds. Search again. Cache: MISS. The entry expired.
 
 ### Manual invalidation
 
-Sometimes you need to remove an entry before its TTL expires. The `/invalidate` endpoint handles this. Add it to `app.py`:
+Sometimes you need to remove an entry before its TTL expires. The `/invalidate` endpoint handles this. Add it to `app.py` above the `if __name__ == "__main__":` block at the bottom of the file. (Placement matters: `app.run()` does not return while the server is running, so a route defined below it is never registered, and the curl command later in this part would get a 404.)
 
 ```python
 @app.route("/invalidate", methods=["POST"])
@@ -580,9 +513,9 @@ In case something has gone wrong, there are completed files in the `safety/` dir
 
 ## Wrapping up
 
-You started with a web application that took over two seconds to respond to every request. You added a Valkey cache layer and dropped that to under one millisecond for repeat lookups. Along the way, you built the cache-aside pattern, configured TTL expiration, and implemented manual invalidation.
+You started with a web application that took over two seconds to respond to every request. You added a Valkey cache layer and dropped that to a couple of milliseconds or less for repeat lookups. Along the way, you built the cache-aside pattern, configured TTL expiration, and implemented manual invalidation.
 
-These are the same patterns used in production systems at scale. The mechanics are identical whether you're serving ten requests or ten million.
+Cache-aside, TTL expiration, and invalidation stay the same as an application grows. What changes is the work around them: a real database, protecting the cache under load, and running Valkey as a cluster, which the 200-level through 400-level workshops cover.
 
 ## Going further
 

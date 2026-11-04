@@ -1,5 +1,6 @@
 -- Seed data for the bookstore database.
--- Identical to the 300-level seed. Run after starting PostgreSQL.
+-- A smaller catalog than the 300-level seed: 13 authors, 15 books, five genres.
+-- Run after starting PostgreSQL.
 -- Safe to run multiple times (truncates before inserting).
 
 CREATE TABLE IF NOT EXISTS authors (
@@ -35,7 +36,10 @@ INSERT INTO authors (name, bio) VALUES
 ('Tim Berners-Lee', 'Computer scientist, inventor of the World Wide Web.'),
 ('Linus Torvalds', 'Software engineer, creator of Linux and Git.'),
 ('Guido van Rossum', 'Programmer, creator of the Python programming language.'),
-('Vint Cerf', 'Internet pioneer, co-designer of TCP/IP protocols.');
+('Vint Cerf', 'Internet pioneer, co-designer of TCP/IP protocols.'),
+('Douglas Adams', 'Author and satirist, created The Hitchhiker''s Guide to the Galaxy.'),
+('Arthur C. Clarke', 'Science fiction author and futurist, co-wrote the screenplay for 2001: A Space Odyssey.'),
+('Carl Sagan', 'Astronomer, author, and science communicator who made the cosmos accessible to everyone.');
 
 -- Books
 INSERT INTO books (title, author_id, genre, published_year, description) VALUES
@@ -51,6 +55,6 @@ INSERT INTO books (title, author_id, genre, published_year, description) VALUES
 ('Linux: A Portable Operating System', 8, 'computing', 1997, 'Technical overview of the Linux kernel architecture.'),
 ('Python Reference Manual', 9, 'computing', 1991, 'The original reference documentation for the Python language.'),
 ('Internetworking with TCP/IP', 10, 'networking', 1978, 'Technical specification of the TCP/IP protocol suite.'),
-('The Hitchhiker''s Guide to the Galaxy', 3, 'science fiction', 1979, 'Earth is demolished for a hyperspace bypass. Arthur Dent handles it poorly.'),
-('2001: A Space Odyssey', 5, 'science fiction', 1968, 'Humanity finds a monolith on the moon and sends a mission to Jupiter. HAL has other plans.'),
-('Cosmos', 9, 'non-fiction', 1980, 'A journey through the universe that makes you feel small and significant at the same time.');
+('The Hitchhiker''s Guide to the Galaxy', 11, 'science fiction', 1979, 'Earth is demolished for a hyperspace bypass. Arthur Dent handles it poorly.'),
+('2001: A Space Odyssey', 12, 'science fiction', 1968, 'Humanity finds a monolith on the moon and sends a mission to Jupiter. HAL has other plans.'),
+('Cosmos', 13, 'non-fiction', 1980, 'A journey through the universe that makes you feel small and significant at the same time.');
