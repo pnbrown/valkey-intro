@@ -14,9 +14,18 @@
         .actions { margin-top: 1.5rem; }
         .actions a { color: #0066cc; text-decoration: none; margin-right: 1.5rem; }
         .actions a:hover { text-decoration: underline; }
+        .flash { background: #fff3cd; border: 1px solid #ffc107; padding: 0.75rem; margin: 1rem 0; border-radius: 4px; }
     </style>
 </head>
 <body>
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="flash" role="status">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
     <h1>{{ book.title }}</h1>
     <div class="meta">
         {{ book.genre | capitalize }} | {{ book.published_year }} | {{ elapsed_ms }}ms | Cache: {{ cache_status }}

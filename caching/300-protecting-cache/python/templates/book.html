@@ -18,10 +18,19 @@
         .actions a { padding: 8px 16px; background: #2563eb; color: white; border-radius: 4px; }
         .actions a:hover { background: #1d4ed8; text-decoration: none; }
         .back-link { display: inline-block; margin-bottom: 16px; }
+        .flash-message { background: #dcfce7; border: 1px solid #22c55e; color: #166534; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
     </style>
 </head>
 <body>
     <a href="/genre/{{ book.genre }}" class="back-link">&larr; {{ book.genre | capitalize }}</a>
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="flash-message" role="status">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
     <h1>{{ book.title }}</h1>
     <div class="timing-info">
         <span>Query time: {{ elapsed_ms }} ms</span>

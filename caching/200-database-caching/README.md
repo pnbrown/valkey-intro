@@ -12,6 +12,7 @@ In the 100-level, you cached results from a simulated slow source. This time the
 ## Prerequisites
 
 - Completion of the [100-level workshop](../100-caching-intro/)
+- Python 3.9 or later
 - Docker (for running Valkey and PostgreSQL)
 - A text editor
 - A terminal
@@ -21,12 +22,17 @@ In the 100-level, you cached results from a simulated slow source. This time the
 Same cache-aside pattern as the 100-level, with an added write path:
 
 ```
-READ PATH:                          WRITE PATH:
-request → cache check               form POST → database UPDATE
-  ├─ HIT → return                     ├─ invalidate book:{id}
-  └─ MISS → database → cache → return├─ invalidate genre:*
-                                      ├─ invalidate genres
-                                      └─ redirect → (triggers read path)
+READ PATH:
+request → cache check
+  ├─ HIT  → return
+  └─ MISS → database → cache → return
+
+WRITE PATH:
+form POST → database UPDATE
+  ├─ invalidate book:{id}
+  ├─ invalidate genre:*
+  ├─ invalidate genres
+  └─ redirect → (triggers read path)
 ```
 
 The key insight: cache invalidation must mirror your data relationships. When a book changes, both the book cache and the genre listing cache are affected.

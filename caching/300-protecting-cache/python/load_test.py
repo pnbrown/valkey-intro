@@ -1,11 +1,11 @@
 """
 Simple concurrent load test for the 300-level workshop (Part 5).
 
-Sends concurrent requests to the genre listing endpoint to demonstrate:
-- Cache warming eliminates cold start misses
-- Mutex lock prevents duplicate database queries under concurrency
-- Circuit breaker eliminates timeout latency during Valkey outage
-- Hit rate stays above 90% under sustained load
+Sends three rounds of concurrent requests to the genre listing pages and
+reports how many succeeded and how long they took. Run it with Valkey up, then
+again with Valkey stopped: every request should succeed both times, because the
+app falls back to PostgreSQL and the circuit breaker stops it from retrying
+Valkey on every request. Check /stats afterward for the hit rate.
 
 Usage:
     python load_test.py
@@ -16,6 +16,7 @@ Requires the Flask app to be running on localhost:5000.
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from http.client import HTTPException
 from urllib.request import urlopen
 from urllib.error import URLError
 from urllib.parse import quote
@@ -33,7 +34,9 @@ def fetch(url):
         response = urlopen(url)
         elapsed = round((time.perf_counter() - start) * 1000)
         return (url, response.status, elapsed)
-    except URLError as exc:
+    except (OSError, HTTPException):
+        # URLError (refused connection or an HTTP error reply), TimeoutError,
+        # and RemoteDisconnected all count as a failed request.
         elapsed = round((time.perf_counter() - start) * 1000)
         return (url, 0, elapsed)
 

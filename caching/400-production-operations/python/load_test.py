@@ -1,10 +1,11 @@
 """
 Simple concurrent load test for the 400-level workshop.
 
-Fires parallel requests at the bookstore to verify:
+Fires 60 parallel requests at the bookstore (five to each endpoint below) to verify:
 - Connection pooling handles concurrent load
 - Cluster client routes correctly under pressure
-- Circuit breaker absorbs node failures during the test
+- Pages keep working after a node fails (see Part C of the README: stop a node
+  first, then run this; /stats returns 503 while the circuit breaker is open)
 
 Usage:
     python load_test.py
@@ -14,8 +15,8 @@ The app must be running on localhost:5000.
 
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from http.client import HTTPException
 from urllib.request import urlopen
-from urllib.error import URLError
 
 
 BASE_URL = "http://localhost:5000"
@@ -44,7 +45,10 @@ def fetch(url):
     try:
         response = urlopen(url, timeout=10)
         status = response.status
-    except URLError as exc:
+    except (OSError, HTTPException) as exc:
+        # HTTPError (a 4xx or 5xx reply) carries the status code. Anything else,
+        # such as a refused connection, a timeout, or a dropped connection
+        # (URLError, TimeoutError, RemoteDisconnected), counts as status 0.
         status = getattr(exc, "code", 0) or 0
     elapsed = round((time.perf_counter() - start) * 1000)
     return (url, status, elapsed)

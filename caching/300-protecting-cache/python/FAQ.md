@@ -1,12 +1,12 @@
-# FAQ: Multi-Key Strategies and Cache Stampedes
+# FAQ: Protecting the Cache Layer
 
 ## Why warm the cache at startup instead of lazily on first request?
 
-Lazy caching (cache-aside) works, but the first N requests after a cold start all hit the database simultaneously. For high-traffic applications, those first requests arrive within milliseconds of each other, creating a stampede on a cold cache. Warming guarantees that known high-traffic keys are populated before any request arrives, eliminating the cold-start penalty entirely.
+Lazy caching (cache-aside) works, but the first N requests after a cold start all hit the database simultaneously. For high-traffic applications, those first requests arrive within milliseconds of each other, creating a stampede on a cold cache. Warming populates the known high-traffic keys before the app accepts its first request, so those keys never start cold. Keys you do not warm (the book pages, in this workshop) still miss once each.
 
 ## Why use a pipeline for warming instead of individual SET calls?
 
-Each SET command is a network round-trip to Valkey (send request, wait for response). For 10 keys, that is 10 round-trips. A pipeline batches all 10 SETs into a single round-trip: the client sends all commands at once, Valkey processes them sequentially, and the client reads all responses together. For cache warming with a known set of keys, this reduces total warming time roughly proportional to the number of keys.
+Each SET command is a network round-trip to Valkey (send request, wait for response). For 10 keys, that is 10 round-trips. A pipeline batches all 10 SETs into a single round-trip: the client sends all commands at once, Valkey processes them sequentially, and the client reads all responses together. For cache warming with a known set of keys, the number of round-trips drops from one per key to one in total.
 
 ## What happens if warming fails?
 
@@ -22,15 +22,19 @@ Valkey does not provide a native "wait for this key to be deleted" operation. Th
 
 ## Could the stampede lock cause a deadlock?
 
-No. The lock has a TTL (`EX 5`). Even in the worst case (the rebuilder process crashes, the app restarts, the lock is orphaned), it expires in 5 seconds. There is no scenario where a lock persists indefinitely. The "wait and retry" loop also has a max retry count, so waiting requests never block forever.
+No. The route releases the lock in a `finally` block, so a failed query does not leave it behind, and the lock also has a TTL (`EX 5`). Even in the worst case (the rebuilder process is killed, so `finally` never runs), it expires in 5 seconds. There is no scenario where a lock persists indefinitely. The "wait and retry" loop also has a max retry count, so waiting requests never block forever.
+
+One limitation is worth knowing. `release_lock()` deletes the lock key unconditionally. If a rebuild ever took longer than 5 seconds, the lock would expire, a second request could take it, and the first request's `release_lock()` would then delete the second request's lock. Production locks avoid this by storing a unique token as the lock's value and deleting the key only if it still holds that token, checked atomically in a Lua script. The workshop's rebuilds take milliseconds, so the simple version is safe here.
 
 ## Why a circuit breaker instead of just try/except with fallback?
 
-try/except with fallback (the 200-level approach) works functionally: every failed cache operation logs a warning and falls through to the database. The problem is latency. Each failed operation waits for the connection timeout (typically 1-3 seconds) before giving up. During a sustained outage, every request pays that timeout cost for no benefit. The circuit breaker eliminates this by detecting the pattern (N consecutive failures) and short-circuiting all cache operations immediately until the cooldown expires. The cost drops from seconds per request to near zero.
+try/except with fallback (the 200-level approach) works functionally: every failed cache operation logs a warning and falls through to the database. The problem is wasted work, and sometimes latency. When Valkey's container is stopped, as in this workshop, each attempt is refused immediately, so the cost per request is small but every request still makes a doomed call and logs a warning. When the host stops answering altogether (a network partition or a crashed machine), each attempt waits for a timeout instead; this `CacheLayer` sets no `socket_timeout`, so that wait is the operating system's TCP connect timeout. The circuit breaker handles both by detecting the pattern (N consecutive failures) and skipping all cache operations until the cooldown expires. In production you would also set `socket_timeout` and `socket_connect_timeout` on the client so a single attempt can never stall a request for long.
 
 ## What does "half-open" mean in practice?
 
-After the circuit opens (Valkey is down) and the cooldown period elapses, the next request that attempts a cache operation is allowed through as a "probe." If it succeeds, the circuit closes and normal operation resumes. If it fails, the circuit reopens and the cooldown timer resets. This prevents the circuit from staying open indefinitely while also preventing a flood of requests from hitting a still-dead Valkey.
+After the circuit opens (Valkey is down) and the cooldown period elapses, cache operations are allowed to reach Valkey again. The first success closes the circuit and normal operation resumes. The first failure reopens it immediately, because the failure count is still at the threshold, and the cooldown timer restarts. This keeps the circuit from staying open forever once Valkey recovers.
+
+The workshop's version is simplified: every request that arrives after the cooldown goes through, not just one. A production circuit breaker usually admits a single trial request and keeps the circuit open for everyone else until that request returns, so a backlog of requests cannot all hit a service that is still down. Implementing that correctly takes a thread-safe "trial in progress" flag and a way to clear it if the trial never reports back, which is more machinery than this workshop needs with one reader and a local container.
 
 ## Why does get_with_lock() talk to self._client directly instead of calling self.get()?
 
@@ -38,7 +42,7 @@ Performance and correctness. `self.get()` checks the circuit breaker, attempts a
 
 ## Are the INFO stats per-key or server-wide?
 
-Server-wide. `keyspace_hits` counts every successful GET (where the key existed), including internal operations and other clients. `keyspace_misses` counts every GET where the key did not exist. The hit rate you calculate from these numbers reflects all traffic to that Valkey instance, not just your application. In a production deployment with multiple applications sharing Valkey, use client-side metrics for per-application hit rates.
+Server-wide. `keyspace_hits` counts every key lookup that found its key, from any read command and any client, not only this app's GETs. `keyspace_misses` counts every lookup that did not. The hit rate you calculate from these numbers reflects all traffic to that Valkey instance, not just your application. In a production deployment with multiple applications sharing Valkey, use client-side metrics for per-application hit rates.
 
 ## Why is the default circuit breaker threshold 3 instead of 1?
 

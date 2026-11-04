@@ -31,9 +31,11 @@ caching/
         ├── FAQ.md             (design decisions, deeper explanations)
         ├── TROUBLESHOOTING.md (common issues and fixes)
         ├── .env.example
+        ├── requirements.txt   (or package.json, go.mod, etc.)
         ├── starter files with placeholders
+        ├── templates/         (HTML templates, for web app levels)
         └── safety/
-            └── completed reference files
+            └── completed reference files (including templates/)
 ```
 
 Each level should assume completion of the previous level. The level README gives a short overview and lists the available language implementations. The full walkthrough lives in each language directory.
@@ -59,7 +61,7 @@ Before opening a pull request that moves or renames files, confirm that every re
 
 ## Improving existing content
 
-If you find errors, unclear instructions, or missing troubleshooting entries, open an issue or submit a fix directly. Keep in mind that our audience is developers who may be new to caching but are not new to programming.
+If you find errors, unclear instructions, or missing troubleshooting entries, open an issue or submit a fix directly. Keep in mind that our audience is developers who know how to program but are learning caching.
 
 ## Style guidelines
 

@@ -14,7 +14,7 @@
 # Stop with:  docker compose down -v
 
 x-valkey-common: &valkey-common
-  image: valkey/valkey:latest
+  image: valkey/valkey:9.1
   command: >
     valkey-server
     --port 6379
@@ -25,6 +25,7 @@ x-valkey-common: &valkey-common
     --maxmemory-policy allkeys-lru
     --appendonly no
     --save ""
+    --enable-debug-command local
   healthcheck:
     test: ["CMD", "valkey-cli", "ping"]
     interval: 3s
@@ -35,7 +36,7 @@ services:
   valkey-1:
     <<: *valkey-common
     ports:
-      - "7001:6379"
+      - "127.0.0.1:7001:6379"
     networks:
       valkey-cluster:
         ipv4_address: 172.30.0.11
@@ -43,7 +44,7 @@ services:
   valkey-2:
     <<: *valkey-common
     ports:
-      - "7002:6379"
+      - "127.0.0.1:7002:6379"
     networks:
       valkey-cluster:
         ipv4_address: 172.30.0.12
@@ -51,7 +52,7 @@ services:
   valkey-3:
     <<: *valkey-common
     ports:
-      - "7003:6379"
+      - "127.0.0.1:7003:6379"
     networks:
       valkey-cluster:
         ipv4_address: 172.30.0.13
@@ -59,7 +60,7 @@ services:
   valkey-4:
     <<: *valkey-common
     ports:
-      - "7004:6379"
+      - "127.0.0.1:7004:6379"
     networks:
       valkey-cluster:
         ipv4_address: 172.30.0.14
@@ -67,7 +68,7 @@ services:
   valkey-5:
     <<: *valkey-common
     ports:
-      - "7005:6379"
+      - "127.0.0.1:7005:6379"
     networks:
       valkey-cluster:
         ipv4_address: 172.30.0.15
@@ -75,13 +76,13 @@ services:
   valkey-6:
     <<: *valkey-common
     ports:
-      - "7006:6379"
+      - "127.0.0.1:7006:6379"
     networks:
       valkey-cluster:
         ipv4_address: 172.30.0.16
 
   cluster-init:
-    image: valkey/valkey:latest
+    image: valkey/valkey:9.1
     depends_on:
       valkey-1:
         condition: service_healthy
@@ -98,27 +99,35 @@ services:
     networks:
       valkey-cluster:
         ipv4_address: 172.30.0.20
-    command: >
-      sh -c "
+    # List form with a literal block: Compose passes the script to sh unchanged,
+    # so the backslash line continuations reach the shell intact.
+    command:
+      - sh
+      - -c
+      - |
         echo 'Waiting for nodes to be ready...' &&
         sleep 2 &&
-        valkey-cli --cluster create
-          172.30.0.11:6379
-          172.30.0.12:6379
-          172.30.0.13:6379
-          172.30.0.14:6379
-          172.30.0.15:6379
-          172.30.0.16:6379
-          --cluster-replicas 1
-          --cluster-yes &&
-        echo 'Cluster creation successful.'
-      "
+        if valkey-cli -h 172.30.0.11 cluster info | grep -q 'cluster_known_nodes:6'; then
+          # A later "docker compose up" re-runs this service; the cluster already exists.
+          echo 'Cluster already exists. Nothing to do.'
+        else
+          valkey-cli --cluster create \
+            172.30.0.11:6379 \
+            172.30.0.12:6379 \
+            172.30.0.13:6379 \
+            172.30.0.14:6379 \
+            172.30.0.15:6379 \
+            172.30.0.16:6379 \
+            --cluster-replicas 1 \
+            --cluster-yes &&
+          echo 'Cluster creation successful.'
+        fi
     restart: "no"
 
   postgres:
     image: postgres:16
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: workshop
       POSTGRES_PASSWORD: workshop

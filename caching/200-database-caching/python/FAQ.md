@@ -10,7 +10,7 @@ This document covers design decisions, concepts, and deeper questions about the 
 
 **Context manager:** A Python pattern using the `with` keyword that automatically handles setup and cleanup. `with get_connection() as conn:` opens a connection when the block starts and closes it when the block ends, even if an error occurs. It replaces the `try/finally` pattern with less boilerplate.
 
-**Connection pool:** A set of pre-opened database connections that get reused across requests instead of opening a new one each time. Opening a connection involves a TCP handshake (a multi-step network negotiation between your application and the database server), which takes a few milliseconds. A pool pays that cost once and reuses the result.
+**Connection pool:** A set of pre-opened database connections that get reused across requests instead of opening a new one each time. Opening a connection involves a TCP handshake (a multi-step network negotiation between your application and the database server) followed by PostgreSQL's login exchange, and both cost network round-trips before the first query runs. A pool pays that cost once and reuses the result.
 
 **SQL injection:** An attack where a malicious user provides input that gets executed as SQL. If you build queries with string formatting (`f"WHERE id = {user_input}"`), an attacker can provide `1; DROP TABLE books` as input and destroy your data. Parameterized queries (`%s` placeholders) prevent this because the SQL structure is separated from the data values.
 
@@ -28,9 +28,9 @@ For connection pooling details, see the [psycopg pool documentation](https://www
 
 ### Why psycopg3 instead of psycopg2 or SQLAlchemy?
 
-psycopg3 (the `psycopg` package) is the actively maintained PostgreSQL adapter for Python. It has a cleaner API than its predecessor. Connections work as context managers, cursors support `row_factory=dict_row` natively, and it's what the psycopg team recommends for all new projects.
+psycopg3 (the `psycopg` package) is the actively maintained PostgreSQL adapter for Python. It has a cleaner API than its predecessor. Connections work as context managers, cursors support `row_factory=dict_row` natively, and the [psycopg2 README](https://github.com/psycopg/psycopg2#readme) itself points new projects to psycopg 3.
 
-psycopg2 is still widely deployed, but it's in maintenance mode. SQLAlchemy adds an ORM and query builder. Both are valid choices, but both add concepts orthogonal to caching. We went with psycopg3 because it keeps the SQL visible and the code minimal.
+psycopg2 is still widely used and maintained, but according to that same README it is not expected to receive new features. SQLAlchemy adds an ORM and query builder. Both are valid choices, but both add concepts orthogonal to caching. We went with psycopg3 because it keeps the SQL visible and the code minimal.
 
 ### Why use `dict_row`?
 
@@ -46,7 +46,7 @@ Our seed script uses `TRUNCATE books, authors RESTART IDENTITY CASCADE` before i
 
 ### Why store `published_year` as INTEGER instead of DATE?
 
-Many entries in our dataset predate the Common Era (Diogenes, Epictetus). PostgreSQL's DATE type doesn't handle negative years cleanly. INTEGER stores the year as a simple number, which works for 350 BCE (`-350`) and 2022 CE (`2022`) without any parsing issues.
+Two entries in our dataset predate the Common Era (both attributed to Diogenes). PostgreSQL's DATE type doesn't handle negative years cleanly. INTEGER stores the year as a simple number, which works for 350 BCE (`-350`) and 2022 CE (`2022`) without any parsing issues.
 
 ### Why is the cache TTL five minutes instead of thirty seconds?
 
@@ -74,7 +74,7 @@ Without it, you'd rely on TTL alone, which means stale data is served until the 
 
 Pattern-based invalidation uses Valkey's SCAN command to find all keys matching a glob pattern (like `genre:*`) and deletes them. It's useful when a single write affects an unknown or large number of cache entries.
 
-In this workshop, the relationships are simple (one book belongs to one genre), so we use targeted invalidation by specific key name because it's clearer. Pattern-based becomes valuable when relationships are many-to-many, when a write could affect entries you can't enumerate cheaply, or when you're doing bulk operations.
+This workshop uses both. The edit route deletes `book:{id}` and `genres` by name, and clears genre listings with `invalidate_pattern("genre:*")`. Because one book belongs to one genre, a targeted `invalidate(f"genre:{book['genre']}")` would also work; Part 4 explains why the workshop takes the more defensive pattern approach. Pattern-based invalidation becomes essential when relationships are many-to-many, when a write could affect entries you can't enumerate cheaply, or when you're doing bulk operations.
 
 For the mechanics, see the [Valkey SCAN command documentation](https://valkey.io/commands/scan/).
 
@@ -82,7 +82,7 @@ For the mechanics, see the [Valkey SCAN command documentation](https://valkey.io
 
 In the 100-level, invalidation was manual (you hit an endpoint that deleted a key). No data was actually mutated. You had one key per topic, and the only relationship was "this key holds this data."
 
-Here at the 200-level, invalidation is triggered by a real data change (editing a book description), and you need to invalidate multiple keys because the data appears in multiple cached views. A book's description lives in both `book:{id}` and `genre:{genre}`. Missing one means stale data in one view but not the other, which is worse than stale data everywhere because it's inconsistent.
+Here at the 200-level, invalidation is triggered by a real data change (editing a book description), and you need to invalidate multiple keys because the data appears in multiple cached views. A book's description lives in both `book:{id}` and `genre:{genre}`, and the edit route also clears the `genres` list. Missing one means stale data in one view but not the other, which is worse than stale data everywhere because it's inconsistent.
 
 ### What happens if the cache invalidation fails after the database write succeeds?
 
@@ -114,7 +114,7 @@ Yes. All data is truncated before inserting, so you always end up with the same 
 
 ### Why are there negative `published_year` values?
 
-Diogenes and Epictetus wrote (or had their words recorded) before the Common Era. `-350` represents 350 BCE. PostgreSQL handles negative integers without issue. If you're querying and want only modern books, filter with `WHERE published_year > 0`.
+The two Diogenes entries date from before the Common Era. `-350` represents 350 BCE. (The Epictetus entries, from 108 and 125, are Common Era years and stay positive.) PostgreSQL handles negative integers without issue. If you're querying and want only modern books, filter with `WHERE published_year > 0`.
 
 ### Why does the SQL use `%s` placeholders instead of f-strings?
 
@@ -128,26 +128,26 @@ Parameterized queries are not optional in production code. We use them from the 
 
 ### What happens if Valkey runs out of memory?
 
-In this workshop the dataset is tiny, so memory is never a concern. In production, Valkey stores everything in RAM, and RAM is finite. If you cache without limits, Valkey eventually runs out of memory and starts refusing writes.
+In this workshop the dataset is tiny, so memory is never a concern. In production, Valkey stores everything in RAM, and RAM is finite. On 64-bit systems, Valkey's default `maxmemory` is zero, which means no limit, so a cache that keeps growing keeps taking RAM until the machine runs short.
 
-You solve this by configuring `maxmemory` and an eviction policy. An eviction policy tells Valkey what to do when it's full. It can evict the least recently used keys (`allkeys-lru`), evict only keys with TTLs (`volatile-lru`), reject new writes (`noeviction`), or use several other strategies. For a pure cache where every key has a TTL, I'd recommend `volatile-lru` as a reasonable default.
+You solve this by configuring `maxmemory` and an eviction policy. An eviction policy tells Valkey what to do when it reaches the limit. It can evict the least recently used keys (`allkeys-lru`), evict only keys with TTLs (`volatile-lru`), refuse writes that need more memory (`noeviction`), or use several other strategies. For a pure cache, where every key can be rebuilt from the database, `allkeys-lru` is the usual choice: the [Valkey key eviction documentation](https://valkey.io/topics/lru-cache/) calls it a good pick if you are unsure, and notes it saves memory because keys do not need a TTL to be eligible for eviction. `volatile-lru` fits an instance that mixes cache keys with keys that must stay.
 
-For all available policies, see the [Valkey eviction documentation](https://valkey.io/topics/lru-cache/). We explore eviction under memory pressure in more depth at the 300-level.
+For all available policies, see the [Valkey eviction documentation](https://valkey.io/topics/lru-cache/). The 400-level workshop explores eviction under memory pressure hands-on.
 
 ### How would connection pooling change the code?
 
-Replace `get_connection()` with a pool that's initialized once at startup:
+The pool lives in a separate package, so install it first with `pip install "psycopg-pool==3.2.8"` (the version the 400-level workshop's requirements pin). Then replace `get_connection()` with a pool that's initialized once at startup:
 
 ```python
 from psycopg_pool import ConnectionPool
 
-pool = ConnectionPool(conninfo=os.environ["DATABASE_URL"], min_size=1, max_size=10)
+pool = ConnectionPool(conninfo=os.environ["DATABASE_URL"], min_size=1, max_size=10, open=True)
 
 def get_connection():
-    return pool.getconn()
+    return pool.connection()
 ```
 
-Then change the `with get_connection() as conn:` pattern to `with pool.connection() as conn:` which handles checkout and return automatically. Everything else (queries, cache logic, error handling) stays the same.
+`pool.connection()` returns a context manager: it checks a connection out of the pool when the `with` block starts and returns it when the block ends. Because `get_connection()` now returns that context manager, every existing `with get_connection() as conn:` block keeps working unchanged. Everything else (queries, cache logic, error handling) stays the same. The 400-level workshop makes exactly this change in Part A1.
 
 ### Would an ORM change how caching works?
 

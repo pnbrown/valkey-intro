@@ -42,7 +42,7 @@ class CacheLayer:
             return False
         elapsed = _time.time() - self._circuit_opened_at
         if elapsed >= self._circuit_cooldown:
-            # Half-open: allow one probe
+            # Half-open: let requests through again to test Valkey
             return False
         return True
 

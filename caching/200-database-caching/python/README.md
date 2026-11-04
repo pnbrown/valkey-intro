@@ -14,11 +14,11 @@ This is where caching gets interesting, honestly. The 100-level teaches you the 
 
 We're assuming you completed the [100-level workshop](../../100-caching-intro/). If cache-aside, TTL, and manual invalidation aren't comfortable to you yet, go back and finish that one first.
 
-You'll need Python 3.9 or later, Docker, a text editor, and a terminal. All commands should be run from this directory unless noted otherwise.
+You'll need Python 3.9 or later, Docker, a text editor, and a terminal. On Linux or Windows, read the [platform notes](../../../README.md#platform-notes) first. All commands should be run from this directory unless noted otherwise.
 
 ## The application
 
-A bookstore catalog. Authors, books, genres. Our database has thirty-four authors and sixty-seven books across nine genres. Small enough to reason about by hand, large enough that database queries take measurable time (typically two to ten milliseconds on a local PostgreSQL container, depending on your machine).
+A bookstore catalog. Authors, books, genres. Our database has thirty-four authors and sixty-seven books across nine genres. Small enough to check by hand, large enough that database queries take measurable time. On the Mac we tested with, each uncached page took 11 to 14 milliseconds against the local PostgreSQL container (the first request after startup took 35); your numbers depend on your machine.
 
 Architecturally, it's the same as the 100-level. A cache layer sits between route handlers and the data source. What's different is that "data source" is now PostgreSQL instead of a Python dictionary.
 
@@ -26,35 +26,36 @@ Architecturally, it's the same as the 100-level. A cache layer sits between rout
 
 ### Starting the infrastructure
 
-We need two containers this time. Valkey (same as before) and PostgreSQL. The `docker-compose.yml` in this directory defines both:
+We need two containers this time. Valkey (same as before) and PostgreSQL. The `docker-compose.yml` in the `200-database-caching/` directory defines both. Here are its essentials (the full file also adds a health check to each service and a named volume, `pgdata`, that keeps the database between restarts):
 
 ```yaml
 services:
   valkey:
-    image: valkey/valkey:8.0
+    image: valkey/valkey:9.1
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   postgres:
     image: postgres:16
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: workshop
       POSTGRES_PASSWORD: workshop
       POSTGRES_DB: bookstore
 ```
 
-From the `200-database-caching/` directory, start them:
+Every command in this workshop runs from the `python/` directory, so move there first (from the repository root), then start both containers. The `-f ../docker-compose.yml` flag points Docker Compose at the file one level up:
 
 ```bash
-docker compose up -d
+cd caching/200-database-caching/python
+docker compose -f ../docker-compose.yml up -d
 ```
 
 Verify both are running:
 
 ```bash
-docker compose ps
+docker compose -f ../docker-compose.yml ps
 ```
 
 You should see `valkey` and `postgres` listed with a status of "Up" or "healthy."
@@ -99,7 +100,7 @@ You don't need to write SQL from scratch in this workshop (the queries are provi
 
 ### The database module
 
-Open `db.py`. Function stubs with TODO placeholders. Fill them in:
+Open `db.py`. You will see function stubs with placeholders that point to the matching step in this guide. Replace each stub function, including its `def` line and docstring, with the matching version below. Leave `get_connection()` at the top of the file as it is:
 
 **`get_books_by_genre`:**
 
@@ -166,7 +167,7 @@ Every query uses `%s` placeholders instead of string formatting. These are param
 
 ### Wiring up the routes
 
-Open `app.py`. Replace the TODO placeholders:
+Open `app.py`. Replace the `home`, `genre_listing`, and `book_detail` routes, each from its `@app.route(...)` line down to the end of its final `return` statement, with the versions below. Leave the edit route alone until Part 4:
 
 **Home route:**
 
@@ -269,7 +270,7 @@ This is the part nobody warns you about in caching tutorials. Writing to the cac
 
 ### Filling in `invalidate_pattern`
 
-Open `cache_layer.py`. Our `get`, `set`, and `invalidate` methods are already complete (identical to the 100-level). Fill in the new `invalidate_pattern` method:
+Open `cache_layer.py`. Our `get`, `set`, and `invalidate` methods are already complete (they work the same way as the ones you wrote in the 100-level). Replace the `invalidate_pattern` stub, including its `def` line and docstring, with:
 
 ```python
     def invalidate_pattern(self, pattern):
@@ -398,7 +399,7 @@ Restart Flask (Ctrl+C, then `python app.py`).
 
 ### Observing the difference
 
-Genre page, first load. Cache MISS, double-digit milliseconds. Second load. Cache HIT, near zero. No database query on the second request.
+Genre page, first load. Cache MISS, double-digit milliseconds. Second load. Cache HIT, about 1 ms. No database query on the second request.
 
 Same pattern on the book detail page. First load hits PostgreSQL. Second is returned from Valkey.
 
@@ -414,7 +415,7 @@ You can see exactly what Valkey is holding with `valkey-cli`. These commands use
 docker compose -f ../docker-compose.yml exec valkey valkey-cli KEYS "*"
 ```
 
-You should see keys like `genre:fantasy`, `book:13`, and `genres`. Check the contents of one:
+You should see `genres` and one key for each page you have opened since enabling the cache, such as `genre:fantasy`. The next command reads `book:13`, *Dungeon Crawler Carl*, so open [http://localhost:5000/book/13](http://localhost:5000/book/13) in the browser first (or click it on the fantasy page). Check its contents:
 
 ```bash
 docker compose -f ../docker-compose.yml exec valkey valkey-cli GET "book:13"
@@ -432,7 +433,7 @@ Watching keys appear after requests, seeing them disappear after invalidation (i
 
 ### Optional: Try breaking it
 
-Before moving on to Part 4, try this. With caching enabled, load a book's detail page (so it's cached). Then change the description directly in the database, bypassing the application:
+Before moving on to Part 4, try this. With caching enabled, load [book 13's detail page](http://localhost:5000/book/13) (so it's cached). Then change the description directly in the database, bypassing the application:
 
 ```bash
 docker compose -f ../docker-compose.yml exec postgres psql -U workshop -d bookstore -c "UPDATE books SET description = 'I changed this behind the cache''s back' WHERE id = 13;"
@@ -492,19 +493,19 @@ def edit_book(book_id):
     # Invalidate affected cache entries
     if CACHE_ENABLED and cache is not None:
         cache.invalidate(f"book:{book_id}")
-        cache.invalidate_pattern(f"genre:*")
+        cache.invalidate_pattern("genre:*")
         cache.invalidate("genres")
 
     flash(f"Description updated for '{book['title']}'.")
     return redirect(url_for("book_detail", book_id=book_id), code=303)
 ```
 
-The `code=303` on the redirect tells the client to follow with a GET request regardless of what method was used to submit. Without it, some HTTP clients (like curl with `-L`) would follow the redirect with another POST, which the book detail route doesn't accept.
+The `code=303` on the redirect ("See Other") tells the client to fetch the book page with a GET request, whatever method submitted the form. [RFC 9110, section 15.4.4](https://www.rfc-editor.org/rfc/rfc9110#section-15.4.4) defines 303 for exactly this case: redirecting after a POST to a page that shows the result. Browsers already follow Flask's default 302 redirect with a GET, so you will not see a difference in the browser; the 303 states the intent explicitly instead of relying on that convention.
 
 What matters here is the invalidation after the database update. Three cache operations happen when a book description changes:
 
 1. `cache.invalidate(f"book:{book_id}")` clears the specific book's detail cache.
-2. `cache.invalidate_pattern("genre:*")` clears all genre listing caches. We use the pattern because a book edit could affect multiple views (the genre listing shows descriptions), and clearing all genre caches is simpler than tracking which specific one contains this book.
+2. `cache.invalidate_pattern("genre:*")` clears all genre listing caches. The genre listing shows descriptions too, so the edit changes a second cached view, and clearing all genre caches is simpler than tracking which specific one contains this book.
 3. `cache.invalidate("genres")` clears the genre list itself (in case you later add logic that changes genre assignments on edit).
 
 That's `invalidate_pattern` in action. For a single book edit we could get away with `cache.invalidate(f"genre:{book['genre']}")` (targeted), but the pattern demonstrates the technique and is safer if your data relationships grow more complex.
@@ -537,7 +538,7 @@ We have a working write-through cache. Every read checks the cache first. Every 
 
 Caching database queries makes sense when the same query runs repeatedly with the same parameters (high read-to-write ratio), when query latency is significant (complex joins, large result sets, remote databases), when database load needs to come down, or when some staleness is acceptable. Even a few seconds of caching helps under load.
 
-In this workshop our dataset is small and the database is local. The milliseconds saved aren't dramatic. In production, where a query takes fifty to two hundred milliseconds because the database is in a different availability zone, caching cuts that to sub-millisecond on hits.
+In this workshop our dataset is small and the database is local. The milliseconds saved aren't dramatic. In production, the database runs on another machine, so every query adds a network round-trip and real query work on top of what you measured here. A cache hit skips both; it costs only the round-trip to Valkey.
 
 ### When it adds more complexity than value
 
@@ -545,7 +546,7 @@ Caching isn't always the right answer. Write-heavy workloads where data changes 
 
 ### The consistency question
 
-What we've implemented here is eventual consistency between the database and the cache. After a write, there's a brief window (between the database commit and cache invalidation completing) where the cache entry doesn't exist and the next request fetches fresh data. In practice, that window is microseconds on a local connection.
+What we've implemented here is eventual consistency between the database and the cache. After a write, there's a brief window between the database commit and the cache invalidation. During that window the old entry is still in the cache, so a request that arrives then is served the old description. Once the invalidation runs, the next request misses and fetches fresh data from the database.
 
 Here's the harder case: Multiple application instances. Instance A updates the database and invalidates the key. But what about instance B? Valkey solves this because all instances share the same external cache. Once a key is deleted from Valkey, every instance sees the deletion on the next read. That's one of the advantages of an external cache over in-process caching.
 
@@ -557,7 +558,7 @@ You built graceful degradation into the cache layer (connection errors return sa
 docker compose -f ../docker-compose.yml stop valkey
 ```
 
-Now refresh a page in the browser. The app still works. Query times are back to database speed (double-digit milliseconds), the cache status shows MISS on every request (the cache layer attempts the operation, fails, and falls through to the database), and if you look at the terminal where Flask is running you'll see logged warnings about Valkey connection failures. The application slowed down but didn't crash.
+Now refresh a page in the browser. The app still works. Query times are back to database speed (double-digit milliseconds; about 12 ms in our test, because a refused connection to a stopped container fails fast), the cache status shows MISS on every request (the cache layer attempts the operation, fails, and falls through to the database), and if you look at the terminal where Flask is running you'll see logged warnings about Valkey connection failures. The application slowed down but didn't crash.
 
 Start Valkey again:
 
@@ -565,7 +566,7 @@ Start Valkey again:
 docker compose -f ../docker-compose.yml up -d valkey
 ```
 
-Refresh. The cache is empty (Valkey lost its data when stopped), so you'll see MISS on the first request and HIT on the second. The system recovered without intervention. That's what graceful degradation looks like in practice: the cache is an optimization, not a requirement for correctness.
+Refresh. The cache is not empty: Valkey saved a snapshot of its data when it stopped and loaded it again on restart (see [Does Valkey persist data to disk?](../../100-caching-intro/python/FAQ.md#does-valkey-persist-data-to-disk) in the 100-level FAQ). Pages whose keys have not expired show HIT right away. Any page you had not visited, or whose five-minute TTL ran out while Valkey was down, shows MISS once and then HIT. The system recovered without intervention. That's what graceful degradation looks like in practice: the cache is an optimization, not a requirement for correctness.
 
 ## Wrapping up
 
@@ -575,7 +576,7 @@ These patterns scale directly. Our bookstore is small, but the architecture is t
 
 ## Going further
 
-The 300-level workshop (when available) builds on this with multiple TTL strategies, cache warming, and stampede prevention.
+The [300-level workshop](../../300-protecting-cache/) builds on this with cache warming, stampede prevention, a circuit breaker for Valkey outages, and measuring cache hit rates.
 
 For reference:
 

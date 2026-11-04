@@ -20,14 +20,27 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
 # Cache configuration
 CACHE_ENABLED = os.environ.get("CACHE_ENABLED", "true").lower() == "true"
 cache = None
+cache_startup_error = None
 
 if CACHE_ENABLED:
     from cache_layer import CacheLayer
-    cache = CacheLayer(
-        circuit_threshold=int(os.environ.get("CIRCUIT_BREAKER_THRESHOLD", "3")),
-        circuit_cooldown=int(os.environ.get("CIRCUIT_BREAKER_COOLDOWN", "30")),
-        ttl_seconds=int(os.environ.get("CACHE_TTL_SECONDS", "300")),
-    )
+    try:
+        cache = CacheLayer(
+            circuit_threshold=int(os.environ.get("CIRCUIT_BREAKER_THRESHOLD", "3")),
+            circuit_cooldown=int(os.environ.get("CIRCUIT_BREAKER_COOLDOWN", "30")),
+            ttl_seconds=int(os.environ.get("CACHE_TTL_SECONDS", "300")),
+        )
+    except Exception as exc:
+        # ValkeyCluster connects while it is constructed. If the cluster is
+        # unreachable, keep serving from PostgreSQL instead of crashing, and
+        # let /health report the problem. Restart the app once Valkey is up.
+        cache_startup_error = str(exc)
+        app.logger.warning("Valkey Cluster unavailable at startup, serving from PostgreSQL only: %s", exc)
+
+# Cache warming at startup (carried forward from the 300-level)
+if cache is not None:
+    from warm_cache import warm_cache
+    warm_cache(cache)
 
 
 @app.route("/")
@@ -57,13 +70,23 @@ def genre_listing(genre):
     start = time.perf_counter()
 
     if CACHE_ENABLED and cache is not None:
-        cached_data, is_hit = cache.get(cache_key)
+        # Stampede protection, carried forward from the 300-level
+        data, is_hit, is_rebuilder = cache.get_with_lock(cache_key)
         if is_hit:
-            books = cached_data
+            books = data
             cache_status = "HIT"
+        elif is_rebuilder:
+            # Release the lock even if the query fails, so the next request can
+            # rebuild right away instead of waiting out the lock's 5-second TTL.
+            try:
+                books = get_books_by_genre(genre)
+                cache.set(cache_key, books)
+            finally:
+                cache.release_lock(cache_key)
+            cache_status = "MISS"
         else:
+            # Retries exhausted or error. Fall through to DB.
             books = get_books_by_genre(genre)
-            cache.set(cache_key, books)
             cache_status = "MISS"
     else:
         books = get_books_by_genre(genre)
@@ -146,8 +169,10 @@ def edit_book(book_id):
 @app.route("/stats")
 def stats():
     """Return cache statistics as JSON."""
-    if not CACHE_ENABLED or cache is None:
+    if not CACHE_ENABLED:
         return jsonify({"error": "Cache is disabled"}), 503
+    if cache is None:
+        return jsonify({"error": f"Cache unavailable: not connected at startup ({cache_startup_error})"}), 503
 
     data = cache.get_stats()
     if data is None:
